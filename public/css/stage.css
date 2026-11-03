@@ -1,0 +1,31 @@
+/* The congregation screen. Laid out on a fixed 1920x1080 stage and scaled to fit, so the preview
+   and every projector paginate identically. */
+.stage-frame { position: relative; overflow: hidden; background: #000; aspect-ratio: 16 / 9; width: 100%; }
+.stage-frame--full { aspect-ratio: auto; width: 100vw; height: 100vh; height: 100dvh; }
+
+.stage {
+  --bg: #000; --fg: #fff; --accent: #fff; --muted: #d6d6d6;
+  position: absolute; top: 0; left: 0; width: 1920px; height: 1080px;
+  transform-origin: 0 0;
+  display: flex; flex-direction: column;
+  padding: 64px 100px 52px;
+  box-sizing: border-box;
+  background: var(--bg); color: var(--fg);
+  font-family: Georgia, 'Times New Roman', 'Noto Serif', serif;
+}
+.stage[data-theme='white'] { --bg: #fff; --fg: #000; --accent: #000; --muted: #333; }
+.stage[data-theme='yellow'] { --bg: #000; --fg: #ffe94d; --accent: #fff; --muted: #fff3a6; }
+.stage[data-theme='navy'] { --bg: #06173a; --fg: #fff; --accent: #ffd66b; --muted: #dbe4f7; }
+
+.stage-reference { flex: none; font-family: Arial, Helvetica, sans-serif; font-size: 60px; line-height: 1.2; font-weight: 700; color: var(--accent); padding-bottom: 28px; }
+.stage-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+.stage-text { font-size: var(--scripture-size, 68px); line-height: 1.34; overflow-wrap: anywhere; }
+.stage-text sup { font-size: 0.5em; font-family: Arial, Helvetica, sans-serif; font-weight: 700; color: var(--muted); padding-right: 0.25em; line-height: 0; vertical-align: 0.65em; }
+.stage-foot { flex: none; display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; padding-top: 24px; font-family: Arial, Helvetica, sans-serif; color: var(--muted); }
+.stage-translation { font-size: 34px; font-weight: 700; }
+.stage-copyright { display: block; font-size: 22px; font-weight: 400; padding-top: 6px; }
+.stage-page { flex: none; font-size: 34px; font-weight: 700; color: var(--accent); }
+.stage-demo { position: absolute; top: 28px; right: 40px; font: 700 26px Arial, Helvetica, sans-serif; letter-spacing: 0.06em; padding: 6px 16px; border: 3px solid var(--muted); color: var(--muted); }
+
+.stage[data-blank='true'] > * { visibility: hidden; }
+.stage-measure { position: absolute; left: -99999px; top: 0; visibility: hidden; pointer-events: none; }

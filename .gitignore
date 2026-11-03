@@ -1,0 +1,4 @@
+node_modules/
+.env
+saved-transcripts/
+.DS_Store

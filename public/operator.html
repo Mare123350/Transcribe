@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transcribe</title>
+  <link rel="icon" href="/img/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/stage.css">
+  <link rel="stylesheet" href="/css/operator.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="brand"><img src="/img/logo.svg" alt="" width="28" height="28"><span>Transcribe</span></h1>
+
+    <div class="field-inline">
+      <span class="label" id="mode-label">Mode</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="mode-label">
+        <button type="button" role="radio" data-mode="review" title="Detected references wait for your approval">Review</button>
+        <button type="button" role="radio" data-mode="automatic" title="Validated, unambiguous references go straight to the screen">Automatic</button>
+      </div>
+    </div>
+
+    <label class="field-inline">
+      <span class="label">Default version</span>
+      <select id="default-translation"></select>
+    </label>
+
+    <div class="topbar-spacer"></div>
+
+    <span id="screens-pill" class="pill">No screens</span>
+    <button type="button" id="open-display" class="button">Open display window</button>
+    <button type="button" id="demo-toggle" class="button" aria-pressed="false">Demo mode</button>
+    <button type="button" id="open-settings" class="button">Privacy</button>
+  </header>
+
+  <div id="demo-banner" class="demo-banner" hidden>
+    <strong>Demo mode.</strong> The transcript is a simulated sample, with no microphone and no transcription service. The scripture is real.
+  </div>
+
+  <div id="messages" class="messages" aria-live="polite"></div>
+
+  <main class="layout">
+    <div class="column">
+      <section class="panel" aria-labelledby="audio-title">
+        <header class="panel-head">
+          <h2 id="audio-title">Audio</h2>
+          <span id="listen-status" class="listen-status" data-state="idle"><span class="dot"></span><span id="listen-text">Not listening</span></span>
+        </header>
+
+        <div id="live-controls" class="stack">
+          <label class="field">
+            <span class="label">Transcription</span>
+            <select id="source-select"></select>
+          </label>
+          <label class="field">
+            <span class="label">Audio input</span>
+            <select id="device-select"></select>
+          </label>
+          <p id="source-note" class="note"></p>
+          <button type="button" id="allow-mic" class="button button-quiet">Allow microphone to list inputs</button>
+        </div>
+
+        <div id="demo-controls" class="stack" hidden>
+          <label class="field">
+            <span class="label">Sample transcript</span>
+            <select id="demo-select"></select>
+          </label>
+          <p id="demo-description" class="note"></p>
+          <label class="field">
+            <span class="label">Speed</span>
+            <select id="demo-speed">
+              <option value="1">Normal</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+            </select>
+          </label>
+          <form id="demo-say" class="inline-form">
+            <input id="demo-say-input" type="text" aria-label="Type a line as if it were spoken" placeholder="Type a line as if spoken…" autocomplete="off">
+            <button type="submit" class="button">Say</button>
+          </form>
+        </div>
+
+        <div class="meter" aria-hidden="true"><div id="meter-bar" class="meter-bar"></div></div>
+        <div class="controls">
+          <button type="button" id="start" class="button button-primary">Start</button>
+          <button type="button" id="pause" class="button" disabled>Pause</button>
+          <button type="button" id="stop" class="button" disabled>Stop</button>
+        </div>
+      </section>
+
+      <section class="panel panel-grow" aria-labelledby="transcript-title">
+        <header class="panel-head">
+          <h2 id="transcript-title">Live transcript</h2>
+          <button type="button" id="clear-transcript" class="link">Clear</button>
+        </header>
+        <div id="transcript" class="transcript" tabindex="0" aria-live="off"><p class="empty">The transcript appears here once listening starts. It isn't saved unless you turn that on under Privacy.</p></div>
+        <div id="hearing" class="hearing" hidden></div>
+      </section>
+    </div>
+
+    <div class="column">
+      <section class="panel" aria-labelledby="search-title">
+        <h2 id="search-title" class="visually-hidden">Find a passage</h2>
+        <form id="search" class="inline-form">
+          <input id="search-input" type="search" aria-label="Find a passage" placeholder="Find a passage: John 3:16, 1 Cor 13:4-7, Psalm 23" autocomplete="off">
+          <button type="submit" class="button">Preview</button>
+        </form>
+        <p id="search-error" class="field-error" hidden></p>
+      </section>
+
+      <section class="panel panel-grow" aria-labelledby="cards-title">
+        <header class="panel-head">
+          <h2 id="cards-title">Detected references</h2>
+          <span id="queue-count" class="count"></span>
+        </header>
+        <div id="cards" class="cards"><p class="empty">References the preacher mentions will appear here.</p></div>
+      </section>
+
+      <section class="panel panel-history" aria-labelledby="history-title">
+        <header class="panel-head"><h2 id="history-title">Passage history</h2></header>
+        <ol id="history" class="history"><li class="empty">Passages you send to the screen are listed here.</li></ol>
+      </section>
+    </div>
+
+    <div class="column">
+      <section class="panel" aria-labelledby="preview-title">
+        <header class="panel-head">
+          <h2 id="preview-title">Preview</h2>
+          <span id="preview-flag" class="flag" hidden></span>
+        </header>
+        <div id="preview-frame" class="stage-frame"><p id="preview-empty" class="stage-empty">Nothing selected</p></div>
+
+        <div class="preview-tools">
+          <div class="button-group" role="group" aria-label="Move by verse">
+            <button type="button" id="prev-verse" class="button" disabled>‹ Verse</button>
+            <button type="button" id="next-verse" class="button" disabled>Verse ›</button>
+          </div>
+          <div class="button-group" role="group" aria-label="Move by page">
+            <button type="button" id="prev-page" class="button" disabled>‹ Page</button>
+            <span id="page-indicator" class="page-indicator">–</span>
+            <button type="button" id="next-page" class="button" disabled>Page ›</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="label">Version for this passage</span>
+          <div id="version-chips" class="chips" role="group" aria-label="Version for this passage"></div>
+        </div>
+        <p id="preview-error" class="field-error" hidden></p>
+
+        <button type="button" id="send" class="button button-send" disabled>Send to Screen</button>
+      </section>
+
+      <section class="panel" aria-labelledby="live-title">
+        <header class="panel-head">
+          <h2 id="live-title">On screen now</h2>
+          <button type="button" id="clear-screen" class="button button-danger-quiet">Clear screen</button>
+        </header>
+        <div class="live-row">
+          <div id="live-frame" class="stage-frame stage-frame--small"></div>
+          <div class="stack display-settings">
+            <div class="field">
+              <span class="label">Text size</span>
+              <div class="button-group">
+                <button type="button" id="font-down" class="button" aria-label="Smaller text">A−</button>
+                <span id="font-size" class="page-indicator"></span>
+                <button type="button" id="font-up" class="button" aria-label="Larger text">A+</button>
+              </div>
+            </div>
+            <label class="field">
+              <span class="label">Theme</span>
+              <select id="theme-select">
+                <option value="black">White on black</option>
+                <option value="white">Black on white</option>
+                <option value="yellow">Yellow on black</option>
+                <option value="navy">White on navy</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="settings" class="dialog" aria-labelledby="settings-title">
+    <form method="dialog">
+      <h2 id="settings-title">Privacy and saving</h2>
+      <p>Audio is never saved by this app. Transcripts stay in memory and disappear when this page closes.</p>
+      <label class="check">
+        <input type="checkbox" id="save-transcripts">
+        <span><strong>Save transcripts on this computer</strong><br>
+        Finished lines of text are added to a dated file in <code id="transcript-dir"></code>. Applies from now until this page is reloaded, and demo transcripts are never saved. Before turning this on, make sure your church is comfortable recording what is said, including in prayer or pastoral moments.</span>
+      </label>
+      <h3>Where the audio goes while listening</h3>
+      <ul>
+        <li><strong>Deepgram:</strong> audio passes through this server to Deepgram for transcription. The app asks Deepgram not to keep it for model improvement.</li>
+        <li><strong>Browser speech recognition:</strong> the browser handles the audio. Chrome sends it to Google to transcribe.</li>
+      </ul>
+      <div class="dialog-actions"><button class="button button-primary" value="close">Done</button></div>
+    </form>
+  </dialog>
+
+  <template id="card-template">
+    <article class="card">
+      <div class="card-top">
+        <div class="card-ref"></div>
+        <span class="badge"></span>
+      </div>
+      <p class="card-heard"></p>
+      <p class="card-reason"></p>
+      <div class="card-options chips"></div>
+      <p class="card-text"></p>
+      <form class="card-correct inline-form" hidden>
+        <input type="text" aria-label="Correct reference" placeholder="Correct reference, e.g. John 3:17" autocomplete="off">
+        <button type="submit" class="button">Use</button>
+      </form>
+      <p class="card-correct-error field-error" hidden></p>
+      <div class="card-actions">
+        <button type="button" class="button button-primary card-send">Send to Screen</button>
+        <button type="button" class="button card-preview">Preview</button>
+        <button type="button" class="link card-fix">Correct</button>
+        <button type="button" class="link card-retry" hidden>Retry</button>
+        <button type="button" class="link card-dismiss">Dismiss</button>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="/js/operator.js"></script>
+</body>
+</html>

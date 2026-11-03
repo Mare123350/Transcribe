@@ -1,0 +1,18 @@
+{
+  "name": "transcribe",
+  "version": "0.1.0",
+  "description": "Listens to a sermon, detects spoken Bible references, and projects the passage for the congregation.",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.9" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "dev": "node --watch --env-file-if-exists=.env server/index.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "data:build": "node scripts/build-bible-data.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "ws": "^8.18.0"
+  }
+}
