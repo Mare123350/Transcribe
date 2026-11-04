@@ -20,6 +20,8 @@ export const DEFAULT_THRESHOLDS = {
 
   // Position tracking
   advanceCoverage: 0.5, // how much of the next line must be heard to move on
+  skipAheadLines: 2, // lines just past the next one can be reached directly, if one went unheard
+  skipCoverage: 0.6, // how much of such a line must be heard
   stayCoverage: 0.6, // how much of the current line must be heard to count as a repeat
   jumpCoverage: 0.7, // how much of another line must be heard to consider jumping there
   strongJumpCoverage: 0.85, // a jump this clear, on a line found in only one section, needs no support

@@ -51,13 +51,30 @@ function build({ name, setlist = [], noise = {}, seed = 1, script }) {
   const truth = [];
   let t = 2000;
 
+  // With noise.chunks, results are cut every few words regardless of line breaks, as real engines do.
+  let held = [];
+  const flush = (at) => {
+    if (held.length) events.push({ t: at, final: held.join(' ') });
+    held = [];
+  };
+
   const singLine = (songId, sectionId, line) => {
     const song = byId.get(songId);
     const text = song.sections.find((s) => s.id === sectionId).lines[line];
     const from = t;
     t += LINE_MS;
     truth.push({ from, to: t, song: songId, section: sectionId, line });
-    if (random() >= (noise.missLine ?? 0)) events.push({ t: t - 200, final: corrupt(text, noise, random) });
+    if (random() < (noise.missLine ?? 0)) return;
+    const heard = corrupt(text, noise, random);
+    if (!noise.chunks) {
+      events.push({ t: t - 200, final: heard });
+      return;
+    }
+    const words = heard.split(' ');
+    words.forEach((word, i) => {
+      held.push(word);
+      if (held.length >= 3 + Math.floor(random() * 9)) flush(from + Math.round(((i + 1) / words.length) * LINE_MS));
+    });
   };
 
   for (const step of script) {
@@ -69,6 +86,7 @@ function build({ name, setlist = [], noise = {}, seed = 1, script }) {
     } else if (step.vamp) {
       for (let i = 0; i < step.times; i++) singLine(step.vamp, step.section, step.line);
     } else if (step.say) {
+      flush(t);
       const from = t;
       for (const sentence of step.say) {
         t += Math.max(2000, sentence.split(' ').length * 400);
@@ -80,6 +98,7 @@ function build({ name, setlist = [], noise = {}, seed = 1, script }) {
       t += step.silence;
     }
   }
+  flush(t);
   writeFileSync(`${out}${name}.json`, `${JSON.stringify({ name, setlist, events, truth }, null, 1)}\n`);
 }
 
@@ -117,6 +136,9 @@ build({ name: 'repeated-choruses', setlist: ALL, noise: { mishear: 0.1 }, seed: 
 build({ name: 'skipped-and-out-of-order', setlist: ALL, noise: { mishear: 0.1 }, seed: 15, script: [{ sing: 'sample-lantern', order: ['v2', 'b', 'v1', 'c'] }] });
 build({ name: 'vamp-then-move-on', setlist: ALL, seed: 16, script: [{ sing: 'sample-tide', order: ['v1', 'c'] }, { vamp: 'sample-tide', section: 'vamp', line: 0, times: 6 }, { sing: 'sample-tide', order: ['v2', 'c'] }] });
 build({ name: 'song-ends-into-talk', setlist: ALL, noise: { mishear: 0.1 }, seed: 17, script: [{ sing: 'sample-meadow' }, { say: TALK }] });
+build({ name: 'cut-anywhere-clean', setlist: ALL, noise: { chunks: true }, seed: 20, script: [{ sing: 'sample-lantern' }] });
+build({ name: 'cut-anywhere-noisy', setlist: ALL, noise: { ...HEAVY, chunks: true }, seed: 21, script: [{ sing: 'sample-tide' }] });
+build({ name: 'cut-anywhere-very-noisy', setlist: ALL, noise: { mishear: 0.35, drop: 0.15, insert: 0.1, missLine: 0.25, chunks: true }, seed: 22, script: [{ sing: 'sample-lantern' }] });
 build({ name: 'talk-only', setlist: ALL, script: [{ say: TALK }] });
 build({ name: 'worship-then-sermon', setlist: ALL, noise: { mishear: 0.1 }, seed: 18, script: [{ say: TALK.slice(0, 2) }, { sing: 'sample-lantern' }, { say: TALK }] });
 build({ name: 'brief-aside-in-song', setlist: ALL, seed: 19, script: [{ sing: 'sample-lantern', order: ['v1', 'c'] }, { say: ['As the psalm reminds us He leads us beside the still waters so sing it again'] }, { sing: 'sample-lantern', order: ['v2', 'c'] }] });

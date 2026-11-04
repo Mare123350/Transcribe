@@ -67,7 +67,7 @@ export const DEMO_TRANSCRIPTS = [
       { say: 'A copper bell rings out above the river' },
       { say: 'Shaking dust from every beam' },
       { say: 'Children running through the wheat and clover' },
-      { say: 'Following the current of the stream', pause: 1500 },
+      { say: 'Following the current of the stream', pause: 12000 },
     ],
   },
 ];

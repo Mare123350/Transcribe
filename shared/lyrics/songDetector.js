@@ -10,6 +10,7 @@ export class SongDetector {
     this.window = [];
     this.scopes = [];
     this.rejected = new Set();
+    this.currentSongId = null; // the song already locked, which shouldn't count as a rival to its successor
   }
 
   // The setlist is searched first, and the full library only if nothing in the setlist matches.
@@ -88,7 +89,7 @@ export class SongDetector {
   }
 
   rank(scope) {
-    const scored = [...scope.candidates.values()].map((candidate) => {
+    const scored = [...scope.candidates.values()].filter((candidate) => candidate.songId !== this.currentSongId).map((candidate) => {
       const evidence = [...candidate.lines.values()].reduce((sum, line) => sum + line.score * line.uniqueness, 0);
       const distinctLines = [...candidate.lines.values()].filter((line) => line.uniqueness > 0.5).length;
       return { candidate, raw: 1 - Math.exp(-evidence / this.t.scoreScale), distinctLines };
