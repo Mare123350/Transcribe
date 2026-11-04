@@ -477,7 +477,7 @@ function afterCardReady(card) {
   card.autoHandled = true;
   if (prefs.mode === 'automatic' && card.status === 'confirmed' && !card.aside) {
     setPreview(card.options[0], card.passage);
-    sendToScreen();
+    sendToScreen({ automatic: true });
     card.sent = true;
   } else if (!state.preview || isPreviewLive()) {
     // Queue up the newest reference so one press of Send puts it on screen, but never replace
@@ -700,9 +700,9 @@ function showExternal(content) {
   publish();
 }
 
-function sendToScreen() {
+function sendToScreen({ automatic = false } = {}) {
   if (!state.preview) return;
-  worship?.noteOtherContentShown();
+  worship?.noteOtherContentShown({ automatic });
   state.live = { ...state.preview };
   const entry = state.live;
   const latest = state.history[0];
@@ -826,7 +826,7 @@ function watchScreens() {
   socket.addEventListener('message', (event) => {
     const message = JSON.parse(event.data);
     if (message.type !== 'screens') return;
-    pill.textContent = message.count === 1 ? '1 screen connected' : message.count ? `${message.count} screens connected` : 'No screens connected';
+    pill.textContent = message.count === 1 ? '1 screen' : message.count ? `${message.count} screens` : 'No screens';
     pill.dataset.ok = String(message.count > 0);
     if (message.count > 0) clearMessage('display');
   });
@@ -911,7 +911,7 @@ function bindEvents() {
     $('search-input').select();
   });
 
-  $('send').addEventListener('click', sendToScreen);
+  $('send').addEventListener('click', () => sendToScreen());
   $('clear-screen').addEventListener('click', clearScreen);
   $('prev-verse').addEventListener('click', () => moveVerse(-1));
   $('next-verse').addEventListener('click', () => moveVerse(1));

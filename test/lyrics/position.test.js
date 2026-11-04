@@ -225,3 +225,50 @@ test('setPosition moves the tracker when the operator takes over', () => {
   h.engine.setPosition(9);
   assert.equal(h.engine.position().index, 9);
 });
+
+test('activity: slow unknown singing is not mistaken for preaching', () => {
+  let time = 0;
+  const events = [];
+  const engine = new LyricsEngine({ now: () => time, onEvent: (e) => events.push(e) });
+  engine.setSongs({ library: SAMPLE_SONGS });
+  engine.classifier.activity = 'worship';
+  for (let i = 0; i < 40; i++) {
+    time += 5000;
+    engine.addFinal({ text: 'lift your praises high' }); // not in the library, about 48 words a minute
+  }
+  assert.ok(!events.some((e) => e.type === 'activity' || (e.type === 'preaching' && e.likely)));
+});
+
+test('activity: fast speech with no lyrics is flagged as preaching after sustained time, not before', () => {
+  let time = 0;
+  const events = [];
+  const engine = new LyricsEngine({ now: () => time, onEvent: (e) => events.push(e) });
+  engine.setSongs({ library: SAMPLE_SONGS });
+  engine.classifier.activity = 'worship';
+  const talk = 'now I want you to think very carefully about what the apostle is saying to this church';
+  while (time < 50_000) {
+    time += 5000;
+    engine.addFinal({ text: talk });
+  }
+  assert.ok(!events.some((e) => e.type === 'preaching'), 'a minute of speech at most is a long aside, not a sermon');
+  while (time < 80_000) {
+    time += 5000;
+    engine.addFinal({ text: talk });
+  }
+  assert.ok(events.some((e) => e.type === 'preaching' && e.likely));
+});
+
+test('activity: a quick mention of a verse is too short to count as preaching', () => {
+  let time = 0;
+  const events = [];
+  const engine = new LyricsEngine({ now: () => time, onEvent: (e) => events.push(e) });
+  engine.setSongs({ library: SAMPLE_SONGS });
+  engine.lock('sample-lantern');
+  const song = ['Carried by the evening tide', 'Every window on the harbor glowing', 'Calling all the sailors home tonight'];
+  for (const line of song) { time += 5000; engine.addFinal({ text: line }); }
+  time += 5000; engine.addFinal({ text: 'As Psalm twenty three reminds us He leads us beside still waters' });
+  for (const line of ['Sing out across the morning bay', 'Sing until the fog rolls away']) { time += 5000; engine.addFinal({ text: line }); }
+  assert.ok(!events.some((e) => e.type === 'preaching'));
+  assert.equal(engine.position().index, 5, 'and the song kept its place');
+  assert.equal(engine.isLyricPhrase('Sing until the fog'), true);
+});

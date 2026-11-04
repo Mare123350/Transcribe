@@ -13,15 +13,16 @@
     <h1 class="brand"><img src="/img/logo.svg" alt="" width="28" height="28"><span>Transcribe</span></h1>
 
     <div class="field-inline">
-      <span class="label" id="service-label">Listening for</span>
+      <span class="visually-hidden" id="service-label">Listening for</span>
       <div class="segmented" role="radiogroup" aria-labelledby="service-label">
         <button type="button" role="radio" data-service="sermon" title="Detect Bible references only">Sermon</button>
         <button type="button" role="radio" data-service="worship" title="Follow songs. Bible references are only offered as quick mentions">Worship</button>
+        <button type="button" role="radio" data-service="auto" title="Works out from sustained evidence whether this is worship or a sermon">Auto-detect</button>
       </div>
     </div>
 
     <div class="field-inline">
-      <span class="label" id="mode-label">Mode</span>
+      <span class="visually-hidden" id="mode-label">Approval</span>
       <div class="segmented" role="radiogroup" aria-labelledby="mode-label">
         <button type="button" role="radio" data-mode="review" title="Detected references wait for your approval">Review</button>
         <button type="button" role="radio" data-mode="automatic" title="Validated, unambiguous references go straight to the screen">Automatic</button>
@@ -29,16 +30,16 @@
     </div>
 
     <label class="field-inline">
-      <span class="label">Default version</span>
+      <span class="label">Version</span>
       <select id="default-translation"></select>
     </label>
 
     <div class="topbar-spacer"></div>
 
     <span id="screens-pill" class="pill">No screens</span>
-    <button type="button" id="open-display" class="button">Open display window</button>
+    <button type="button" id="open-display" class="button">Open display</button>
     <button type="button" id="demo-toggle" class="button" aria-pressed="false">Demo mode</button>
-    <button type="button" id="open-library" class="button">Song library</button>
+    <button type="button" id="open-library" class="button">Songs</button>
     <button type="button" id="open-settings" class="button">Privacy</button>
   </header>
 
@@ -120,6 +121,7 @@
       <section id="worship-panel" class="panel" aria-labelledby="worship-title">
         <header class="panel-head">
           <h2 id="worship-title">Worship lyrics</h2>
+          <span id="activity-status" class="flag" hidden></span>
           <span id="worship-state" class="flag" hidden></span>
         </header>
         <form id="song-find" class="inline-form">
@@ -137,6 +139,7 @@
             <div class="song-title" id="song-title"></div>
             <span id="follow-status" class="flag"></span>
           </div>
+          <p id="song-source" class="note"></p>
           <p id="song-notice" class="note" hidden></p>
           <div class="song-lines">
             <p class="song-line-label">Now</p><p id="song-current" class="song-current"></p>

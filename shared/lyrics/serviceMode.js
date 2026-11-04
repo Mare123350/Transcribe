@@ -1,7 +1,8 @@
 // Which detectors listen in each service mode, and what a Bible reference means during worship.
 export const SERVICE_MODES = ['sermon', 'worship', 'auto'];
 
-// `current` is what Auto-detect currently believes is happening.
+// `current` is what Auto-detect currently believes is happening. Auto-detect always runs lyric
+// detection, because lyrics are its evidence that worship has started.
 export function routeFor(mode, current = 'sermon') {
   if (mode === 'sermon') return { verses: true, lyrics: false, activity: 'sermon' };
   if (mode === 'worship') return { verses: true, lyrics: true, activity: 'worship' };

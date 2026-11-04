@@ -83,3 +83,41 @@ test('line tracking: results cut anywhere, with heavy noise, stay mostly close',
   const result = replay('cut-anywhere-noisy');
   assert.ok(result.lineClose >= 0.7, `within one line ${result.lineClose}`);
 });
+
+test('auto-detect: talking never switches to worship', () => {
+  assert.deepEqual(replay('talk-only', { autoDetect: true }).switches, []);
+});
+
+test('auto-detect: a full worship song then a sermon switches each way, once', () => {
+  const { switches } = replay('worship-then-sermon', { autoDetect: true });
+  assert.deepEqual(switches.map((s) => s.activity), ['worship', 'sermon']);
+  const fixture = load('worship-then-sermon');
+  const firstSong = fixture.truth.find((span) => span.song).from;
+  assert.ok(switches[0].t - firstSong >= 20_000, 'worship needs sustained evidence');
+  const talkStart = fixture.truth.findLast((span) => !span.song).from;
+  assert.ok(switches[1].t - talkStart >= 60_000, 'preaching needs sustained evidence');
+});
+
+test('auto-detect: a brief spoken aside inside a song does not leave worship', () => {
+  const { switches } = replay('brief-aside-in-song', { autoDetect: true });
+  assert.deepEqual(switches.map((s) => s.activity), ['worship']);
+});
+
+test('auto-detect: no song is proposed before worship is established', () => {
+  const result = replay('worship-then-sermon', { autoDetect: true });
+  const worshipAt = result.switches[0].t;
+  assert.ok(result.locks.length >= 1);
+  assert.ok(result.locks.every((lock) => lock.t >= worshipAt), JSON.stringify(result.locks));
+});
+
+test('auto-detect: no wrong detections across every transcript', () => {
+  for (const file of readdirSync(folder)) {
+    const result = replay(file.replace('.json', ''), { autoDetect: true });
+    assert.equal(result.wrongDetections, 0, file);
+  }
+});
+
+test('thresholds change the outcome, so tuning through the harness works', () => {
+  const strict = replay('clean-full-song', { thresholds: { autoThreshold: 0.999 } });
+  assert.equal(strict.missed, 1);
+});

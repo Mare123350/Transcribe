@@ -12,6 +12,7 @@
     "dev": "node --watch --env-file-if-exists=.env server/index.js",
     "test": "node --test \"test/**/*.test.js\"",
     "test:browser": "node test/browser/run.mjs",
+    "replay": "node scripts/replay-lyrics.mjs",
     "data:build": "node scripts/build-bible-data.mjs"
   },
   "dependencies": {
