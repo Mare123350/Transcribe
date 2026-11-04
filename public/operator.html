@@ -133,7 +133,11 @@
           <div id="setlist-chips" class="chips" role="group" aria-label="Songs in this service"></div>
         </div>
         <div id="song-now" class="song-now" hidden>
-          <div class="song-title" id="song-title"></div>
+          <div class="song-heading">
+            <div class="song-title" id="song-title"></div>
+            <span id="follow-status" class="flag"></span>
+          </div>
+          <p id="song-notice" class="note" hidden></p>
           <div class="song-lines">
             <p class="song-line-label">Now</p><p id="song-current" class="song-current"></p>
             <p class="song-line-label">Next</p><p id="song-next" class="song-next"></p>
@@ -144,6 +148,8 @@
             <button type="button" id="line-next" class="button">Line ›</button>
             <button type="button" id="lyrics-show" class="button button-primary">Show on screen</button>
             <button type="button" id="lyrics-blank" class="button">Blank</button>
+            <button type="button" id="follow-toggle" class="button">Pause auto-follow</button>
+            <button type="button" id="song-wrong" class="button">Wrong song</button>
             <button type="button" id="song-next-song" class="button" hidden>Next song ›</button>
             <button type="button" id="song-close" class="link">Close song</button>
           </div>

@@ -251,6 +251,7 @@ const LISTEN_TEXT = {
 function setListen(status) {
   state.listen = status;
   renderListen();
+  worship?.onListeningChanged();
 }
 
 function renderListen() {
@@ -992,6 +993,7 @@ async function init() {
     getApprovalMode: () => prefs.mode,
     usesBrowserSpeech: () => !state.demo && $('source-select').value === 'webspeech',
     onAudioProfileChange: (profile) => state.source?.setProfile?.(profile),
+    isListening: () => state.listen === 'listening',
     showMessage,
     clearMessage,
   });

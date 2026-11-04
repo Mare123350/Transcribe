@@ -20,7 +20,7 @@ function loadServiceMode() {
   }
 }
 
-export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, clearMessage, isDemo, getApprovalMode, usesBrowserSpeech, onAudioProfileChange }) {
+export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, clearMessage, isDemo, getApprovalMode, usesBrowserSpeech, onAudioProfileChange, isListening }) {
   const state = {
     songs: [],
     setlists: [],
@@ -33,6 +33,9 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     serviceMode: loadServiceMode(),
     candidates: [],
     readySongId: null,
+    autoFollow: true,
+    hiddenBySilence: false, // automation took lyrics down, so it may put them back
+    notice: '',
   };
 
   const engine = new LyricsEngine({ onEvent: handleEngineEvent });
@@ -131,6 +134,13 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     if (!song) return;
 
     const line = arrangement[index];
+    const listening = isListening() && route().lyrics;
+    const follow = $('follow-status');
+    follow.textContent = !state.autoFollow ? 'Manual' : (listening ? 'Following' : 'Not listening');
+    follow.dataset.kind = state.autoFollow && listening ? 'live' : 'unsent';
+    $('follow-toggle').textContent = state.autoFollow ? 'Pause auto-follow' : 'Resume auto-follow';
+    $('song-notice').textContent = state.notice;
+    $('song-notice').hidden = !state.notice;
     $('song-title').textContent = song.title;
     $('song-current').textContent = line?.text ?? '';
     $('song-next').textContent = arrangement[index + 1]?.text ?? '(end of song)';
@@ -144,7 +154,7 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
       type: 'button',
       class: 'chip',
       'aria-pressed': String(line?.orderIndex === arrangement[stop.index].orderIndex),
-      on: { click: () => goTo(stop.index) },
+      on: { click: () => manualGoTo(stop.index) },
     }, stop.label)));
   }
 
@@ -158,7 +168,32 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     refreshScreen();
   }
 
+  // Anything the operator does by hand stops automation until they turn it back on.
+  function takeManualControl() {
+    state.autoFollow = false;
+    state.hiddenBySilence = false;
+  }
+
+  function manualGoTo(index) {
+    takeManualControl();
+    goTo(index);
+    engine.setPosition(state.index);
+  }
+
+  function resumeFollow() {
+    state.autoFollow = true;
+    state.notice = '';
+    const position = engine.position();
+    if (position) state.index = position.index;
+    state.onScreen = true;
+    state.interrupted = false;
+    refreshScreen();
+  }
+
   function loadSong(song, index = 0) {
+    state.autoFollow = true;
+    state.hiddenBySilence = false;
+    state.notice = '';
     state.song = song;
     state.arrangement = arrangementOf(song);
     state.index = index;
@@ -177,6 +212,8 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
   function closeSong() {
     if (state.onScreen) clearScreen();
     engine.unlock();
+    state.hiddenBySilence = false;
+    state.notice = '';
     state.song = null;
     state.onScreen = false;
     state.interrupted = false;
@@ -200,18 +237,87 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     render();
   }
 
-  function handleEngineEvent(event) {
-    if (event.type === 'candidates') {
-      state.candidates = event.candidates;
-      if (!event.candidates.some((c) => c.songId === state.readySongId)) state.readySongId = null;
+  // The wrong song is on screen: take it down and stop suggesting it.
+  function wrongSong() {
+    const id = state.song?.id;
+    closeSong();
+    if (id) engine.reject(id);
+  }
+
+  function offerOrAccept(event) {
+    if (getApprovalMode() === 'automatic') {
+      confirmCandidate(event);
+    } else {
+      state.readySongId = event.songId;
       renderSuggestions();
-    } else if (event.type === 'proposal') {
-      if (getApprovalMode() === 'automatic') {
-        confirmCandidate(event);
-      } else {
-        state.readySongId = event.songId;
+    }
+  }
+
+  function handleEngineEvent(event) {
+    switch (event.type) {
+      case 'candidates':
+        state.candidates = event.candidates;
+        if (!event.candidates.some((c) => c.songId === state.readySongId)) state.readySongId = null;
         renderSuggestions();
-      }
+        break;
+      case 'proposal':
+        offerOrAccept(event);
+        break;
+      case 'position':
+        // While paused, the tracker keeps listening in the background but touches nothing on screen.
+        if (state.autoFollow) goTo(event.index);
+        break;
+      case 'quiet':
+        if (event.byOperator) {
+          state.notice = 'No singing heard for a while. The lyrics stay up because you chose this song.';
+        } else if (state.autoFollow) {
+          state.notice = 'No singing heard, so the lyrics are off the screen. They return if the song resumes.';
+          if (state.onScreen) {
+            state.onScreen = false;
+            state.hiddenBySilence = true;
+            clearScreen();
+          }
+        } else {
+          state.notice = 'No singing heard. Auto-follow is paused, so nothing has changed on screen.';
+        }
+        render();
+        break;
+      case 'resume':
+        state.notice = '';
+        if (state.hiddenBySilence && state.autoFollow) {
+          state.hiddenBySilence = false;
+          state.onScreen = true;
+          state.index = event.index;
+          refreshScreen();
+        } else {
+          render();
+        }
+        break;
+      case 'ended':
+        if (state.autoFollow && state.song?.id === event.songId) {
+          if (state.onScreen) clearScreen();
+          state.song = null;
+          state.onScreen = false;
+          state.interrupted = false;
+          state.hiddenBySilence = false;
+          state.notice = '';
+          showMessage('song-ended', 'The song seems to have ended, so its lyrics were cleared.');
+          render();
+        } else if (state.song?.id === event.songId) {
+          state.notice = 'The song seems to have ended. Auto-follow is paused, so its lyrics stay until you change them.';
+          render();
+        }
+        break;
+      case 'songChange':
+        // Never replace a song the operator chose or is controlling. Just offer the new one.
+        if (event.byOperator || !state.autoFollow) {
+          state.readySongId = event.songId;
+          renderSuggestions();
+        } else {
+          offerOrAccept(event);
+        }
+        break;
+      default:
     }
   }
 
@@ -268,18 +374,29 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
       if (next) chooseSong(next);
     });
     $('song-find').addEventListener('submit', findAndLoad);
-    $('line-prev').addEventListener('click', () => goTo(state.index - 1));
-    $('line-next').addEventListener('click', () => goTo(state.index + 1));
+    $('line-prev').addEventListener('click', () => manualGoTo(state.index - 1));
+    $('line-next').addEventListener('click', () => manualGoTo(state.index + 1));
     $('lyrics-show').addEventListener('click', () => {
       state.onScreen = true;
       state.interrupted = false;
+      state.hiddenBySilence = false;
       refreshScreen();
     });
     $('lyrics-blank').addEventListener('click', () => {
+      takeManualControl();
       state.onScreen = false;
       clearScreen();
       render();
     });
+    $('follow-toggle').addEventListener('click', () => {
+      if (state.autoFollow) {
+        takeManualControl();
+        render();
+      } else {
+        resumeFollow();
+      }
+    });
+    $('song-wrong').addEventListener('click', wrongSong);
     $('song-close').addEventListener('click', closeSong);
   }
 
@@ -299,6 +416,9 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
       refreshSongs();
       warnAboutSource();
       render();
+      setInterval(() => {
+        if (isListening() && route().lyrics) engine.tick();
+      }, 1000);
     },
     refreshSongs,
     audioProfile,
@@ -307,6 +427,7 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     onFinal({ text, words }) {
       if (route().lyrics) engine.addFinal({ text, words });
     },
+    onListeningChanged: render,
 
     // Decides what a Bible reference means right now. Returns it (perhaps changed), or null to drop it.
     checkVerseDetection(found) {
@@ -328,6 +449,7 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
       render();
     },
     noteBlanked() {
+      takeManualControl();
       state.onScreen = false;
       render();
     },

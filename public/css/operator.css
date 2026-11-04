@@ -152,6 +152,7 @@ textarea { font: inherit; color: var(--ink); background: var(--panel); border: 1
 .suggestion-title { font-weight: 650; }
 .suggestion-meta { grid-column: 1; font-size: 12px; color: var(--muted); }
 .suggestion-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 6px; align-items: center; }
+.song-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .song-title { font-size: 16px; font-weight: 700; }
 .song-now { display: flex; flex-direction: column; gap: 8px; }
 .song-lines { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; align-items: baseline; }
