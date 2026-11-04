@@ -1,5 +1,12 @@
 // Captures the selected input and streams it to our server, which relays it to Deepgram.
 // All sources share one shape: start/pause/resume/stop, plus onTranscript and onStatus callbacks.
+// Browser noise suppression is built for speech and may treat singing and instruments as noise, so
+// the music profile turns it off. The speech profile is unchanged, so sermons sound as they did.
+const AUDIO_PROFILES = {
+  speech: { echoCancellation: false, noiseSuppression: true, autoGainControl: true },
+  music: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+};
+
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000];
 const CLOSE_NO_RETRY = 4401;
 
@@ -10,7 +17,8 @@ export class DeepgramSource {
     this.paused = false;
   }
 
-  async start({ deviceId }) {
+  async start({ deviceId, profile = 'speech' }) {
+    this.profile = profile;
     // Stop can be pressed while the permission prompt is still up. `run` lets this notice when it
     // resumes, so the microphone doesn't turn on after the screen says it has stopped.
     const run = {};
@@ -20,9 +28,7 @@ export class DeepgramSource {
       audio: {
         deviceId: deviceId ? { exact: deviceId } : undefined,
         channelCount: 1,
-        echoCancellation: false,
-        noiseSuppression: true,
-        autoGainControl: true,
+        ...AUDIO_PROFILES[profile],
       },
     });
     if (this.run !== run) {
@@ -48,7 +54,7 @@ export class DeepgramSource {
 
   connect() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${protocol}//${location.host}/ws/transcribe`);
+    const socket = new WebSocket(`${protocol}//${location.host}/ws/transcribe?profile=${this.profile}`);
     socket.binaryType = 'arraybuffer';
     this.socket = socket;
     this.lastError = null;
@@ -56,7 +62,7 @@ export class DeepgramSource {
     socket.addEventListener('message', (event) => {
       const message = JSON.parse(event.data);
       if (message.type === 'transcript') {
-        this.onTranscript({ text: message.text, isFinal: message.isFinal });
+        this.onTranscript({ text: message.text, isFinal: message.isFinal, words: message.words });
       } else if (message.type === 'status') {
         if (message.state === 'connected') {
           this.attempt = 0;
@@ -81,6 +87,18 @@ export class DeepgramSource {
       });
       this.retryTimer = setTimeout(() => this.connect(), delay);
     });
+  }
+
+  // Switches between speech and music settings while listening.
+  async setProfile(profile) {
+    if (profile === this.profile || !this.active) return;
+    this.profile = profile;
+    for (const track of this.stream?.getAudioTracks() ?? []) await track.applyConstraints({ ...track.getConstraints(), ...AUDIO_PROFILES[profile] }).catch(() => {});
+    const old = this.socket;
+    clearTimeout(this.retryTimer);
+    this.connect();
+    if (old?.readyState === WebSocket.OPEN) old.send(JSON.stringify({ type: 'stop' }));
+    old?.close();
   }
 
   pause() {

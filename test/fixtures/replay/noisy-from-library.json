@@ -1,0 +1,184 @@
+{
+ "name": "noisy-from-library",
+ "setlist": [],
+ "events": [
+  {
+   "t": 6800,
+   "final": "golde apples hanging in the orchard"
+  },
+  {
+   "t": 11800,
+   "final": "Sweetness on the morning breeze"
+  },
+  {
+   "t": 16800,
+   "final": "ever bench is bending with the blossom and"
+  },
+  {
+   "t": 21800,
+   "final": "Honey in the hello the trees"
+  },
+  {
+   "t": 26800,
+   "final": "walk with me beneath the arches"
+  },
+  {
+   "t": 31800,
+   "final": "We will gather by the open door"
+  },
+  {
+   "t": 36800,
+   "final": "the cider, pass the basket"
+  },
+  {
+   "t": 41800,
+   "final": "ther is always room for more"
+  },
+  {
+   "t": 46800,
+   "final": "Winter under quilted of snowfall"
+  },
+  {
+   "t": 51800,
+   "final": "remember how to climb"
+  },
+  {
+   "t": 56800,
+   "final": "Patient seeds beneat frozen hillside"
+  },
+  {
+   "t": 61800,
+   "final": "for the turnin of"
+  },
+  {
+   "t": 66800,
+   "final": "walk with me beneath the arches"
+  },
+  {
+   "t": 71800,
+   "final": "We will by the open door"
+  },
+  {
+   "t": 76800,
+   "final": "Pour the cider, pass yeah the basket"
+  },
+  {
+   "t": 81800,
+   "final": "There is always room of for more"
+  }
+ ],
+ "truth": [
+  {
+   "from": 2000,
+   "to": 7000,
+   "song": "sample-orchard",
+   "section": "v1",
+   "line": 0
+  },
+  {
+   "from": 7000,
+   "to": 12000,
+   "song": "sample-orchard",
+   "section": "v1",
+   "line": 1
+  },
+  {
+   "from": 12000,
+   "to": 17000,
+   "song": "sample-orchard",
+   "section": "v1",
+   "line": 2
+  },
+  {
+   "from": 17000,
+   "to": 22000,
+   "song": "sample-orchard",
+   "section": "v1",
+   "line": 3
+  },
+  {
+   "from": 22000,
+   "to": 27000,
+   "song": "sample-orchard",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 27000,
+   "to": 32000,
+   "song": "sample-orchard",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 32000,
+   "to": 37000,
+   "song": "sample-orchard",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 37000,
+   "to": 42000,
+   "song": "sample-orchard",
+   "section": "c",
+   "line": 3
+  },
+  {
+   "from": 42000,
+   "to": 47000,
+   "song": "sample-orchard",
+   "section": "v2",
+   "line": 0
+  },
+  {
+   "from": 47000,
+   "to": 52000,
+   "song": "sample-orchard",
+   "section": "v2",
+   "line": 1
+  },
+  {
+   "from": 52000,
+   "to": 57000,
+   "song": "sample-orchard",
+   "section": "v2",
+   "line": 2
+  },
+  {
+   "from": 57000,
+   "to": 62000,
+   "song": "sample-orchard",
+   "section": "v2",
+   "line": 3
+  },
+  {
+   "from": 62000,
+   "to": 67000,
+   "song": "sample-orchard",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 67000,
+   "to": 72000,
+   "song": "sample-orchard",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 72000,
+   "to": 77000,
+   "song": "sample-orchard",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 77000,
+   "to": 82000,
+   "song": "sample-orchard",
+   "section": "c",
+   "line": 3
+  }
+ ]
+}

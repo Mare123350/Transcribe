@@ -178,6 +178,7 @@ test('transcription: audio is relayed, results come back, and the key stays on t
   assert.equal(url.searchParams.get('sample_rate'), '16000');
   assert.equal(url.searchParams.get('interim_results'), 'true');
   assert.equal(url.searchParams.get('mip_opt_out'), 'true');
+  assert.equal(url.searchParams.get('endpointing'), '300', 'speech settings are unchanged');
   assert.equal(received.headers.authorization, 'Token good-key');
 
   client.send(Buffer.alloc(3200));
@@ -197,6 +198,14 @@ test('transcription: audio is relayed, results come back, and the key stays on t
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.ok(received.text.some((m) => m.type === 'Finalize'));
   assert.ok(received.text.some((m) => m.type === 'CloseStream'));
+  client.close();
+});
+
+test('transcription: the music profile changes Deepgram settings', async () => {
+  const client = new WebSocket(`${wsBase}/ws/transcribe?profile=music`);
+  const from = messagesFrom(client);
+  await from((m) => m.type === 'status' && m.state === 'connected');
+  assert.equal(new URL(received.url, 'http://x').searchParams.get('endpointing'), '500');
   client.close();
 });
 

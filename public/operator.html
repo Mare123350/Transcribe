@@ -13,6 +13,14 @@
     <h1 class="brand"><img src="/img/logo.svg" alt="" width="28" height="28"><span>Transcribe</span></h1>
 
     <div class="field-inline">
+      <span class="label" id="service-label">Listening for</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="service-label">
+        <button type="button" role="radio" data-service="sermon" title="Detect Bible references only">Sermon</button>
+        <button type="button" role="radio" data-service="worship" title="Follow songs. Bible references are only offered as quick mentions">Worship</button>
+      </div>
+    </div>
+
+    <div class="field-inline">
       <span class="label" id="mode-label">Mode</span>
       <div class="segmented" role="radiogroup" aria-labelledby="mode-label">
         <button type="button" role="radio" data-mode="review" title="Detected references wait for your approval">Review</button>
@@ -119,6 +127,7 @@
           <datalist id="song-find-list"></datalist>
           <button type="submit" class="button">Load</button>
         </form>
+        <div id="song-suggestions" class="song-suggestions" hidden></div>
         <div id="setlist-strip" class="setlist-strip" hidden>
           <span class="label" id="setlist-strip-name"></span>
           <div id="setlist-chips" class="chips" role="group" aria-label="Songs in this service"></div>
