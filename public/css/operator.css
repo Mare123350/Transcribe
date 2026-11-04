@@ -141,6 +141,11 @@ select, input[type='text'], input[type='search'] { padding: 5px 9px; min-width: 
 .dialog-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 
 textarea { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 8px 9px; }
+.setlist-strip { display: flex; flex-direction: column; gap: 4px; }
+.library-tabs { align-self: flex-start; }
+.setlist-items { list-style: none; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.setlist-items li { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; }
+.setlist-items span { flex: 1; min-width: 0; }
 .song-title { font-size: 16px; font-weight: 700; }
 .song-now { display: flex; flex-direction: column; gap: 8px; }
 .song-lines { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; align-items: baseline; }

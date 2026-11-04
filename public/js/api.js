@@ -43,3 +43,7 @@ export const updateSong = (id, song) => send('PUT', `/api/songs/${encodeURICompo
 export const deleteSong = (id) => send('DELETE', `/api/songs/${encodeURIComponent(id)}`);
 export const getLyricsSettings = () => request('/api/lyrics-settings');
 export const updateLyricsSettings = (patch) => send('PUT', '/api/lyrics-settings', patch);
+export const listSetlists = () => request('/api/setlists');
+export const createSetlist = (setlist) => send('POST', '/api/setlists', setlist);
+export const updateSetlist = (id, setlist) => send('PUT', `/api/setlists/${encodeURIComponent(id)}`, setlist);
+export const deleteSetlist = (id) => send('DELETE', `/api/setlists/${encodeURIComponent(id)}`);

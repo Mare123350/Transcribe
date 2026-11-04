@@ -82,6 +82,18 @@ export function createLyricsStore(directory) {
     };
   };
 
+  const cleanSetlist = (input, id, d) => {
+    const name = String(input?.name ?? '').trim();
+    if (!name) throw new ValidationError('A setlist needs a name.');
+    const known = new Set(d.songs.map((s) => s.id));
+    return {
+      id,
+      name,
+      date: String(input.date ?? '').trim(),
+      songIds: (Array.isArray(input.songIds) ? input.songIds : []).map(String).filter((songId) => known.has(songId)),
+    };
+  };
+
   return {
     directory,
     async listSongs() {
@@ -112,6 +124,27 @@ export function createLyricsStore(directory) {
       const allowed = Object.fromEntries(Object.entries(patch ?? {}).filter(([key]) => key in DEFAULT_SETTINGS));
       d.settings = { ...d.settings, ...allowed };
       return { ...DEFAULT_SETTINGS, ...d.settings };
+    }),
+
+    async listSetlists() {
+      return [...(await load()).setlists].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    },
+    createSetlist: (input) => change((d) => {
+      const setlist = cleanSetlist(input, randomUUID(), d);
+      d.setlists.push(setlist);
+      return setlist;
+    }),
+    updateSetlist: (id, input) => change((d) => {
+      const index = d.setlists.findIndex((s) => s.id === id);
+      if (index < 0) throw new NotFoundError('That setlist no longer exists.');
+      d.setlists[index] = cleanSetlist(input, id, d);
+      return d.setlists[index];
+    }),
+    deleteSetlist: (id) => change((d) => {
+      const before = d.setlists.length;
+      d.setlists = d.setlists.filter((s) => s.id !== id);
+      if (d.setlists.length === before) throw new NotFoundError('That setlist no longer exists.');
+      if (d.settings.activeSetlistId === id) d.settings.activeSetlistId = null;
     }),
 
     async exportAll() {

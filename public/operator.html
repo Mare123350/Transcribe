@@ -119,6 +119,10 @@
           <datalist id="song-find-list"></datalist>
           <button type="submit" class="button">Load</button>
         </form>
+        <div id="setlist-strip" class="setlist-strip" hidden>
+          <span class="label" id="setlist-strip-name"></span>
+          <div id="setlist-chips" class="chips" role="group" aria-label="Songs in this service"></div>
+        </div>
         <div id="song-now" class="song-now" hidden>
           <div class="song-title" id="song-title"></div>
           <div class="song-lines">
@@ -131,6 +135,7 @@
             <button type="button" id="line-next" class="button">Line ›</button>
             <button type="button" id="lyrics-show" class="button button-primary">Show on screen</button>
             <button type="button" id="lyrics-blank" class="button">Blank</button>
+            <button type="button" id="song-next-song" class="button" hidden>Next song ›</button>
             <button type="button" id="song-close" class="link">Close song</button>
           </div>
         </div>
@@ -233,7 +238,38 @@
       <h2 id="library-title">Song library</h2>
       <button type="button" id="library-close" class="button">Close</button>
     </div>
-    <div class="library-body">
+    <div class="segmented library-tabs" role="tablist">
+      <button type="button" role="tab" id="tab-songs" aria-selected="true" aria-checked="true">Songs</button>
+      <button type="button" role="tab" id="tab-setlists" aria-selected="false" aria-checked="false">Setlists</button>
+    </div>
+    <div id="setlists-pane" class="library-body" hidden>
+      <div class="library-list-pane">
+        <div class="library-actions"><button type="button" id="setlist-new" class="button button-primary">New setlist</button></div>
+        <ul id="setlist-list" class="library-list"></ul>
+      </div>
+      <form id="setlist-editor" class="song-editor" hidden>
+        <div class="song-editor-grid">
+          <label class="field"><span class="label">Name</span><input id="setlist-name" type="text" placeholder="Sunday morning"></label>
+          <label class="field"><span class="label">Date</span><input id="setlist-date" type="date"></label>
+        </div>
+        <div class="field">
+          <span class="label">Songs, in the order you expect them</span>
+          <ol id="setlist-items" class="setlist-items"></ol>
+        </div>
+        <div class="inline-form">
+          <input id="setlist-add-input" type="search" list="song-find-list" aria-label="Add a song" placeholder="Add a song from the library" autocomplete="off">
+          <button type="button" id="setlist-add" class="button">Add</button>
+        </div>
+        <p id="setlist-error" class="field-error" hidden></p>
+        <div class="library-actions">
+          <button type="submit" class="button button-primary">Save setlist</button>
+          <button type="button" id="setlist-use" class="button">Use for this service</button>
+          <button type="button" id="setlist-delete" class="button button-danger-quiet">Delete</button>
+        </div>
+      </form>
+      <div id="setlist-empty" class="song-editor-empty">Build a setlist for each service. Songs in the active setlist are searched first when listening.</div>
+    </div>
+    <div id="songs-pane" class="library-body">
       <div class="library-list-pane">
         <input id="library-search" type="search" aria-label="Search songs" placeholder="Search titles, artists and lyrics" autocomplete="off">
         <div class="library-actions">

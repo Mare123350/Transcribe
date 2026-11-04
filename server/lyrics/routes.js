@@ -12,6 +12,14 @@ export function createLyricsRouter(store) {
     response.status(204).end();
   });
 
+  router.get('/setlists', async (_request, response) => response.json(await store.listSetlists()));
+  router.post('/setlists', async (request, response) => response.status(201).json(await store.createSetlist(request.body)));
+  router.put('/setlists/:id', async (request, response) => response.json(await store.updateSetlist(request.params.id, request.body)));
+  router.delete('/setlists/:id', async (request, response) => {
+    await store.deleteSetlist(request.params.id);
+    response.status(204).end();
+  });
+
   router.get('/lyrics-settings', async (_request, response) => response.json(await store.getSettings()));
   router.put('/lyrics-settings', async (request, response) => response.json(await store.updateSettings(request.body)));
 
