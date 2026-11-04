@@ -1,8 +1,9 @@
 // The worship lyrics panel. Everything here works by hand with no microphone, so the operator can
 // always run a song manually, whatever happens to transcription or detection.
-import { getLyricsSettings } from '/js/api.js';
+import { getLyricsSettings, updateLyricsSettings } from '/js/api.js';
 import { arrangementOf, lyricsScreen, sectionStops } from '/shared/lyrics/songs.js';
 import { createLibraryDialog } from '/js/lyrics/libraryDialog.js';
+import { createSetlistEditor } from '/js/lyrics/setlistEditor.js';
 import { el } from '/js/lyrics/dom.js';
 
 const $ = (id) => document.getElementById(id);
@@ -10,6 +11,7 @@ const $ = (id) => document.getElementById(id);
 export function createWorshipPanel({ showOnScreen, clearScreen, showMessage }) {
   const state = {
     songs: [],
+    setlists: [],
     settings: {},
     song: null,
     arrangement: [],
@@ -20,6 +22,7 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage }) {
   const library = createLibraryDialog({
     onSongsChanged: (songs) => {
       state.songs = songs;
+      renderSetlist();
       $('song-find-list').replaceChildren(...songs.map((song) => el('option', { value: song.title })));
     },
     onLoadSong: (song) => loadSong(song),
@@ -31,7 +34,42 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage }) {
     showMessage,
   });
 
+  const setlistEditor = createSetlistEditor({
+    getSongs: () => state.songs,
+    getActiveId: () => state.settings.activeSetlistId,
+    onChanged: (setlists) => {
+      state.setlists = setlists;
+      renderSetlist();
+    },
+    onUse: async (id) => {
+      try {
+        state.settings = await updateLyricsSettings({ activeSetlistId: id });
+        renderSetlist();
+      } catch (error) {
+        showMessage('library', `Couldn't set the active setlist: ${error.message}`, { kind: 'error' });
+      }
+    },
+  });
+
+  const activeSetlist = () => state.setlists.find((s) => s.id === state.settings.activeSetlistId) ?? null;
+  const setlistSongs = () => (activeSetlist()?.songIds ?? []).map((id) => state.songs.find((s) => s.id === id)).filter(Boolean);
+
+  function renderSetlist() {
+    const songs = setlistSongs();
+    $('setlist-strip').hidden = !activeSetlist();
+    $('setlist-strip-name').textContent = activeSetlist() ? `Service: ${activeSetlist().name}` : '';
+    $('setlist-chips').replaceChildren(...songs.map((song, position) => el('button', {
+      type: 'button',
+      class: 'chip',
+      'aria-pressed': String(state.song?.id === song.id),
+      on: { click: () => loadSong(song) },
+    }, `${position + 1}. ${song.title}`)));
+    const at = songs.findIndex((song) => song.id === state.song?.id);
+    $('song-next-song').hidden = at < 0 || at >= songs.length - 1;
+  }
+
   function render() {
+    renderSetlist();
     const { song, arrangement, index } = state;
     $('song-now').hidden = !song;
     const flag = $('worship-state');
@@ -98,6 +136,12 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage }) {
 
   function bind() {
     library.bind();
+    setlistEditor.bind();
+    $('song-next-song').addEventListener('click', () => {
+      const songs = setlistSongs();
+      const next = songs[songs.findIndex((song) => song.id === state.song?.id) + 1];
+      if (next) loadSong(next);
+    });
     $('song-find').addEventListener('submit', findAndLoad);
     $('line-prev').addEventListener('click', () => goTo(state.index - 1));
     $('line-next').addEventListener('click', () => goTo(state.index + 1));
@@ -122,6 +166,9 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage }) {
         showMessage('library', `Couldn't load lyrics settings: ${error.message}`, { kind: 'error' });
       }
       await library.refresh();
+      await setlistEditor.refresh().catch((error) => {
+        showMessage('library', `Couldn't load setlists: ${error.message}`, { kind: 'error' });
+      });
       render();
     },
     // A Bible passage went on screen, or the operator cleared it.

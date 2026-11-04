@@ -86,3 +86,30 @@ test('a damaged library file is reported rather than silently replaced', async (
   assert.equal(await readFile(join(folder, 'lyrics.json'), 'utf8'), '{ not json');
   await rm(folder, { recursive: true, force: true });
 });
+
+test('setlists: ordering, unknown songs dropped, and deleting a song removes it from setlists', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'transcribe-lyrics-'));
+  const store = createLyricsStore(folder);
+  const a = await store.createSong({ ...song, title: 'A' });
+  const b = await store.createSong({ ...song, title: 'B' });
+  const setlist = await store.createSetlist({ name: 'Sunday', date: '2026-11-08', songIds: [b.id, 'missing', a.id] });
+  assert.deepEqual(setlist.songIds, [b.id, a.id]);
+
+  await assert.rejects(store.createSetlist({ name: '  ' }), /name/);
+
+  await store.updateSettings({ activeSetlistId: setlist.id });
+  await store.deleteSong(b.id);
+  assert.deepEqual((await store.listSetlists())[0].songIds, [a.id]);
+  await store.deleteSetlist(setlist.id);
+  assert.equal((await store.getSettings()).activeSetlistId, null, 'the active setlist is cleared with it');
+  await rm(folder, { recursive: true, force: true });
+});
+
+test('setlists over the API', async () => {
+  const created = await (await fetch(`${base}/setlists`, json('POST', { name: 'Evening', date: '2026-11-08', songIds: [] }))).json();
+  assert.ok(created.id);
+  const updated = await (await fetch(`${base}/setlists/${created.id}`, json('PUT', { name: 'Renamed' }))).json();
+  assert.equal(updated.name, 'Renamed');
+  assert.equal((await fetch(`${base}/setlists/${created.id}`, { method: 'DELETE' })).status, 204);
+  assert.equal((await fetch(`${base}/setlists/${created.id}`, json('PUT', { name: 'x' }))).status, 404);
+});
