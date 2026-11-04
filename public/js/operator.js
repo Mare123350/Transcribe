@@ -1,5 +1,6 @@
 // The operator dashboard: wires the transcript sources, the detector, Bible lookups, and the screen.
 import { ApiError, getConfig, getPassage, getVersification, publishDisplay, saveTranscript } from '/js/api.js';
+import { createWorshipPanel } from '/js/lyrics/worshipPanel.js';
 import { createPaginator, createStage, fitStage, renderStage } from '/js/stage.js';
 import { DeepgramSource } from '/js/transcription/deepgramSource.js';
 import { DemoSource } from '/js/transcription/demoSource.js';
@@ -601,7 +602,12 @@ function renderCards() {
 
 // ---- Preview and congregation screen ----
 
-const stageState = (entry) => (entry ? {
+const stageState = (entry) => (entry?.external ? {
+  ...entry.external,
+  fontPx: prefs.fontPx,
+  theme: prefs.theme,
+  demo: state.demo,
+} : entry ? {
   blank: false,
   reference: entry.passage.reference,
   translation: entry.passage.translation,
@@ -613,7 +619,7 @@ const stageState = (entry) => (entry ? {
   demo: entry.demo,
 } : { blank: true, theme: prefs.theme });
 
-const sameEntry = (a, b) => Boolean(a && b)
+const sameEntry = (a, b) => Boolean(a?.passage && b?.passage)
   && a.passage.reference === b.passage.reference
   && a.passage.translation.id === b.passage.translation.id;
 
@@ -677,8 +683,17 @@ function renderLive() {
   renderStage(liveStage, stageState(state.live));
 }
 
+// The worship panel puts lyrics on the screen through here.
+function showExternal(content) {
+  state.live = { external: content };
+  renderLive();
+  renderPreview();
+  publish();
+}
+
 function sendToScreen() {
   if (!state.preview) return;
+  worship?.noteOtherContentShown();
   state.live = { ...state.preview };
   const entry = state.live;
   const latest = state.history[0];
@@ -692,6 +707,7 @@ function sendToScreen() {
 }
 
 function clearScreen() {
+  worship?.noteBlanked();
   state.live = null;
   renderLive();
   renderPreview();
@@ -744,7 +760,7 @@ function movePage(direction) {
 }
 
 function repaginate(entry) {
-  if (!entry) return;
+  if (!entry?.passage) return;
   const firstVerse = entry.pages[entry.page]?.[0]?.verse;
   entry.pages = paginator({ passage: entry.passage, reference: entry.passage.reference, fontPx: prefs.fontPx });
   const page = entry.pages.findLastIndex((p) => p[0].verse <= firstVerse);
@@ -812,6 +828,10 @@ function watchScreens() {
     setTimeout(watchScreens, 2000);
   });
 }
+
+// ---- Worship lyrics ----
+
+let worship = null;
 
 // ---- Wiring ----
 
@@ -952,6 +972,19 @@ async function init() {
   renderLive();
   setDemo(new URLSearchParams(location.search).has('demo'));
   watchScreens();
+  worship = createWorshipPanel({
+    showOnScreen: showExternal,
+    clearScreen: () => {
+      state.live = null;
+      renderLive();
+      renderPreview();
+      publish();
+    },
+    isDemo: () => state.demo,
+    showMessage,
+    clearMessage,
+  });
+  worship.init();
 }
 
 init();

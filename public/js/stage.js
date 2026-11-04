@@ -12,6 +12,7 @@ export function createStage(container) {
   stage.innerHTML = `
     <div class="stage-reference"></div>
     <div class="stage-body"><div class="stage-text"></div></div>
+    <div class="stage-lyrics"></div>
     <div class="stage-foot">
       <div class="stage-translation"><span class="stage-translation-name"></span><span class="stage-copyright"></span></div>
       <div class="stage-page"></div>
@@ -53,7 +54,12 @@ export function renderStage(stage, state) {
   stage.dataset.theme = state?.theme ?? 'black';
   if (state?.fontPx) stage.style.setProperty('--scripture-size', `${state.fontPx}px`);
   stage.querySelector('.stage-demo').hidden = !state?.demo || blank;
+  stage.dataset.kind = state?.kind === 'lyrics' && !blank ? 'lyrics' : 'passage';
   if (blank) return;
+  if (state.kind === 'lyrics') {
+    renderLyrics(stage, state);
+    return;
+  }
 
   const pages = state.pages ?? [];
   const page = Math.min(state.page ?? 0, Math.max(pages.length - 1, 0));
@@ -62,6 +68,35 @@ export function renderStage(stage, state) {
   stage.querySelector('.stage-translation-name').textContent = `${state.translation.name} (${state.translation.abbreviation})`;
   stage.querySelector('.stage-copyright').textContent = state.copyright ?? '';
   stage.querySelector('.stage-page').textContent = pages.length > 1 ? `${page + 1} / ${pages.length}` : '';
+}
+
+function renderLyrics(stage, state) {
+  const box = stage.querySelector('.stage-lyrics');
+  const signature = JSON.stringify(state.lines);
+  stage.dataset.highlight = String(state.highlight !== false);
+  stage.querySelector('.stage-translation-name').textContent = state.credit ?? '';
+  stage.querySelector('.stage-copyright').textContent = '';
+  stage.querySelector('.stage-page').textContent = '';
+  if (box.dataset.signature === signature) return;
+  box.dataset.signature = signature;
+
+  box.replaceChildren(...state.lines.map((line) => {
+    const element = document.createElement('p');
+    element.className = line.current ? 'lyric-line lyric-current' : 'lyric-line';
+    element.textContent = line.text;
+    return element;
+  }));
+
+  // Long lines shrink to fit rather than running off the screen.
+  let size = (state.fontPx ?? 68) * 1.25;
+  box.style.setProperty('--lyric-size', `${size}px`);
+  while (box.scrollHeight > box.clientHeight && size > 28) {
+    size *= 0.94;
+    box.style.setProperty('--lyric-size', `${size}px`);
+  }
+  if (!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    box.animate?.([{ opacity: 0.15 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+  }
 }
 
 // Splits a passage to fit at the given font size, using a hidden stage for real text measurement.

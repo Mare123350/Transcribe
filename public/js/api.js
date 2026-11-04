@@ -30,3 +30,16 @@ export const getVersification = (id) => request(`/api/translations/${encodeURICo
 export const getPassage = (refKey, translationId) => request(`/api/passage?ref=${encodeURIComponent(refKey)}&translation=${encodeURIComponent(translationId)}`);
 export const publishDisplay = (state) => post('/api/display', state);
 export const saveTranscript = (text) => post('/api/transcripts', { text });
+
+const send = (method, path, body) => request(path, {
+  method,
+  headers: { 'content-type': 'application/json' },
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
+
+export const listSongs = () => request('/api/songs');
+export const createSong = (song) => send('POST', '/api/songs', song);
+export const updateSong = (id, song) => send('PUT', `/api/songs/${encodeURIComponent(id)}`, song);
+export const deleteSong = (id) => send('DELETE', `/api/songs/${encodeURIComponent(id)}`);
+export const getLyricsSettings = () => request('/api/lyrics-settings');
+export const updateLyricsSettings = (patch) => send('PUT', '/api/lyrics-settings', patch);
