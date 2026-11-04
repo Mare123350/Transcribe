@@ -144,7 +144,10 @@ async function useDefaultTranslation(id) {
 
 const detector = new ReferenceDetector({
   versification: { exact: false, books: {} },
-  onDetection: addDetection,
+  onDetection: (found) => {
+    const checked = worship ? worship.checkVerseDetection(found) : found;
+    if (checked) addDetection(checked);
+  },
   onRepeat: (found) => {
     const card = state.cards.find((c) => c.key === found.key);
     if (card) {
@@ -153,7 +156,8 @@ const detector = new ReferenceDetector({
     }
     highlightPhrase(found.phrase);
   },
-  onTentative: (found) => {
+  onTentative: (detected) => {
+    const found = worship?.isWorshipActive() ? [] : detected; // sung words shouldn't flicker up here
     const hearing = $('hearing');
     hearing.hidden = !found.length;
     hearing.replaceChildren();
@@ -211,7 +215,7 @@ function highlightPhrase(phrase) {
   renderTranscript();
 }
 
-function handleTranscript({ text, isFinal }) {
+function handleTranscript({ text, isFinal, words }) {
   if (isFinal) {
     interimText = '';
     if (text.trim()) {
@@ -224,6 +228,7 @@ function handleTranscript({ text, isFinal }) {
       }
     }
     renderTranscript();
+    worship?.onFinal({ text, words }); // first, so the verse check knows whether these were lyrics
     detector.addFinal(text);
   } else {
     interimText = text;
@@ -318,7 +323,7 @@ async function start() {
       }
     }, 8000);
     try {
-      await source.start({ deviceId: $('device-select').value });
+      await source.start({ deviceId: $('device-select').value, profile: worship?.audioProfile() ?? 'speech' });
     } catch (error) {
       if (state.source !== source) return; // the operator already pressed Stop
       throw error;
@@ -401,6 +406,7 @@ function setDemo(on) {
   $('live-controls').hidden = on;
   $('demo-controls').hidden = !on;
   $('demo-description').textContent = DEMO_TRANSCRIPTS.find((d) => d.id === $('demo-select').value)?.description ?? '';
+  worship?.refreshSongs();
   renderListen();
 }
 
@@ -421,6 +427,7 @@ function addDetection(found) {
     lookup: found.status === 'invalid' ? 'none' : 'loading',
     sent: false,
     repeats: 0,
+    aside: Boolean(found.aside),
   };
   state.cards.unshift(card);
   state.cards.length = Math.min(state.cards.length, MAX_CARDS);
@@ -467,7 +474,7 @@ function afterCardReady(card) {
   }
   if (card.autoHandled) return;
   card.autoHandled = true;
-  if (prefs.mode === 'automatic' && card.status === 'confirmed') {
+  if (prefs.mode === 'automatic' && card.status === 'confirmed' && !card.aside) {
     setPreview(card.options[0], card.passage);
     sendToScreen();
     card.sent = true;
@@ -481,6 +488,7 @@ function afterCardReady(card) {
 function badgeText(card) {
   if (card.sent) return 'Sent to screen';
   if (card.status === 'invalid') return 'Not found';
+  if (card.aside) return 'Mentioned during worship';
   if (card.status === 'suggestion') return 'Needs confirmation';
   return 'Confirmed';
 }
@@ -541,7 +549,7 @@ function renderCards() {
     const sendButton = node.querySelector('.card-send');
     sendButton.hidden = card.status === 'invalid';
     sendButton.disabled = !canUse;
-    sendButton.textContent = card.sent ? 'Send again' : 'Send to Screen';
+    sendButton.textContent = card.sent ? 'Send again' : (card.aside ? 'Show briefly' : 'Send to Screen');
     sendButton.addEventListener('click', () => {
       setPreview(cardRef(card), card.passage);
       sendToScreen();
@@ -981,6 +989,9 @@ async function init() {
       publish();
     },
     isDemo: () => state.demo,
+    getApprovalMode: () => prefs.mode,
+    usesBrowserSpeech: () => !state.demo && $('source-select').value === 'webspeech',
+    onAudioProfileChange: (profile) => state.source?.setProfile?.(profile),
     showMessage,
     clearMessage,
   });

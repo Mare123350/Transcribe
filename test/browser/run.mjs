@@ -171,6 +171,8 @@ const c2=frames.length; await sleep(500); ok(frames.length===c2,'stop halts audi
 
 console.log('— Worship lyrics: library and manual display');
 await runStage1();
+console.log('— Worship detection');
+await runDetection();
 console.log('— Stop while permission prompt is pending');
 const held=await ctx.newPage(); watch(held,'held');
 await held.addInitScript(()=>{const G=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);window.__streams=[];window.__ws=0;navigator.mediaDevices.getUserMedia=async c=>{await new Promise(r=>setTimeout(r,1200));const s=await G(c);window.__streams.push(s);return s};const W=window.WebSocket;window.WebSocket=class extends W{constructor(u){super(u);if(u.includes('transcribe'))window.__ws++}}});
@@ -269,6 +271,49 @@ async function runStage1(){
   ok(await op.locator('#library-list button',{hasText:'Browser Test Song'}).count()===0,'song deleted');
   await op.click('#library-close');
   await op.click('#song-close').catch(()=>{});
+}
+
+async function playDemo(id){ await op.selectOption('#demo-select',id); await op.selectOption('#demo-speed','4'); await op.click('#start'); }
+function finished(){ return op.waitForFunction(()=>document.querySelector('#listen-text').textContent==='Not listening',null,{timeout:60000}); }
+async function runDetection(){
+  await op.goto('http://localhost:3100/?demo'); await sleep(500);
+  await op.click('[data-mode=review]'); await op.click('[data-service=worship]');
+  await playDemo('worship');
+  await op.waitForSelector('.suggestion',{timeout:15000});
+  ok((await dp.locator('.stage').getAttribute('data-kind'))!=='lyrics'||(await dp.locator('.stage').getAttribute('data-blank'))==='true','review: a suggestion puts nothing on screen');
+  await op.waitForSelector('.suggestion[data-ready=true]',{timeout:15000});
+  ok((await op.locator('.suggestion-title').first().textContent()).includes('Lantern'),'the right song is suggested');
+  await op.screenshot({path:SH+'/30-suggestion.png'});
+  await op.locator('.suggestion-confirm').first().click(); await sleep(200);
+  ok((await op.locator('#song-title').textContent()).includes('Lantern'),'confirm loads the song');
+  ok((await dp.locator('.stage').getAttribute('data-kind'))==='lyrics','confirm puts lyrics up');
+  await finished(); await sleep(300);
+  const aside=op.locator('.card',{hasText:'Psalm 23'});
+  ok(await aside.count()===1,'a spoken reference becomes a card');
+  ok((await aside.locator('.badge').textContent())==='Mentioned during worship','labelled as a mention');
+  ok((await dp.locator('.stage').getAttribute('data-kind'))==='lyrics','the mention did not interrupt the lyrics');
+  await op.screenshot({path:SH+'/31-aside.png'});
+  await aside.locator('.card-send').click(); await sleep(250);
+  ok((await dref())==='Psalm 23','Show briefly puts the verse up');
+  ok((await op.locator('#lyrics-show').textContent())==='Back to lyrics','Back to lyrics offered');
+  await op.click('#lyrics-show'); await sleep(250);
+  ok((await dp.locator('.stage').getAttribute('data-kind'))==='lyrics','Back to lyrics returns');
+  await op.click('#song-close'); await sleep(200);
+  console.log('— Worship in Automatic');
+  await op.goto('http://localhost:3100/?demo'); await sleep(500);
+  await op.click('[data-mode=automatic]');
+  await playDemo('worship');
+  await op.waitForFunction(()=>document.querySelector('#song-title')?.textContent.includes('Lantern'),null,{timeout:30000});
+  await sleep(100);
+  ok((await dp.locator('.stage').getAttribute('data-kind'))==='lyrics','automatic: a confident match goes up');
+  await finished(); await sleep(300);
+  ok((await dp.locator('.stage').getAttribute('data-kind'))==='lyrics','automatic: a mention still does not interrupt');
+  await op.click('#song-close'); await sleep(200);
+  await op.goto('http://localhost:3100/?demo'); await sleep(500);
+  await op.click('[data-mode=review]'); await op.click('[data-service=sermon]');
+  await playDemo('worship'); await finished(); await sleep(300);
+  ok(await op.locator('.suggestion').count()===0,'sermon mode runs no lyric detection');
+  ok((await op.locator('.card',{hasText:'Psalm 23'}).locator('.badge').textContent())==='Confirmed','sermon mode treats references normally');
 }
 
 const real=errs.filter(e=>!/ERR_CONNECTION_REFUSED|WebSocket connection/.test(e));

@@ -1,0 +1,230 @@
+{
+ "name": "song-ends-into-talk",
+ "setlist": [
+  "sample-lantern",
+  "sample-orchard",
+  "sample-meadow",
+  "sample-tide"
+ ],
+ "events": [
+  {
+   "t": 6800,
+   "final": "Dandelions dancing in the meadow"
+  },
+  {
+   "t": 11800,
+   "final": "Swallows wheeling throug the blue"
+  },
+  {
+   "t": 16800,
+   "final": "Barefoot on the path behind the cottage"
+  },
+  {
+   "t": 21800,
+   "final": "Trampling through the diamonds of the dew"
+  },
+  {
+   "t": 26800,
+   "final": "we will gather by the open door"
+  },
+  {
+   "t": 31800,
+   "final": "Kettle singin on the stove"
+  },
+  {
+   "t": 36800,
+   "final": "Tell the story one time more"
+  },
+  {
+   "t": 41800,
+   "final": "Of the road that led us home"
+  },
+  {
+   "t": 46800,
+   "final": "we will gather by the open door"
+  },
+  {
+   "t": 51800,
+   "final": "Kettle singing on the stone"
+  },
+  {
+   "t": 56800,
+   "final": "Tell the story one time more"
+  },
+  {
+   "t": 61800,
+   "final": "Of the road that led us home"
+  },
+  {
+   "t": 68800,
+   "final": "Good morning church it is so wonderful to be together in the house of the Lord today"
+  },
+  {
+   "t": 75200,
+   "final": "Would you please open your Bibles with me as we look at the passage this morning"
+  },
+  {
+   "t": 81600,
+   "final": "I want you to think about what it really means to trust when everything feels uncertain"
+  },
+  {
+   "t": 88800,
+   "final": "When I was a young man my grandfather used to tell me a story about his first job"
+  },
+  {
+   "t": 96000,
+   "final": "He said that you can always tell the character of a person by how they treat a stranger"
+  },
+  {
+   "t": 102000,
+   "final": "And that is exactly what the apostle is trying to help this young church understand"
+  },
+  {
+   "t": 109200,
+   "final": "They were afraid and they had every reason to be afraid because of what was happening around them"
+  },
+  {
+   "t": 116400,
+   "final": "But the message comes to them and it says do not lose heart because you are not alone"
+  },
+  {
+   "t": 124000,
+   "final": "So this morning I want to ask you a very simple question and I want you to be honest"
+  },
+  {
+   "t": 130800,
+   "final": "What are you holding onto today that you need to finally lay down and walk away from"
+  },
+  {
+   "t": 137600,
+   "final": "Some of you came in here carrying something heavy and nobody around you even knows about it"
+  },
+  {
+   "t": 145200,
+   "final": "I believe there is hope for you this morning and I believe you are going to leave here different"
+  },
+  {
+   "t": 152800,
+   "final": "Now look at how the writer builds this argument one step at a time as we keep on reading"
+  },
+  {
+   "t": 159600,
+   "final": "First he reminds them where they came from and then he reminds them who they belong to"
+  },
+  {
+   "t": 165600,
+   "final": "That matters because identity shapes every decision you are going to make this coming week"
+  },
+  {
+   "t": 172400,
+   "final": "Let me give you an example from something that happened in my own family just last year"
+  },
+  {
+   "t": 179200,
+   "final": "My daughter called me very late one night and she was upset about something at her school"
+  },
+  {
+   "t": 187600,
+   "final": "And I did not have the right answer but I got in the car and I drove over to see her"
+  },
+  {
+   "t": 194400,
+   "final": "Sometimes showing up is the whole sermon and you do not need any clever words at all"
+  },
+  {
+   "t": 200800,
+   "final": "Let us think about how that changes the way we treat one another in this congregation"
+  }
+ ],
+ "truth": [
+  {
+   "from": 2000,
+   "to": 7000,
+   "song": "sample-meadow",
+   "section": "v1",
+   "line": 0
+  },
+  {
+   "from": 7000,
+   "to": 12000,
+   "song": "sample-meadow",
+   "section": "v1",
+   "line": 1
+  },
+  {
+   "from": 12000,
+   "to": 17000,
+   "song": "sample-meadow",
+   "section": "v1",
+   "line": 2
+  },
+  {
+   "from": 17000,
+   "to": 22000,
+   "song": "sample-meadow",
+   "section": "v1",
+   "line": 3
+  },
+  {
+   "from": 22000,
+   "to": 27000,
+   "song": "sample-meadow",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 27000,
+   "to": 32000,
+   "song": "sample-meadow",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 32000,
+   "to": 37000,
+   "song": "sample-meadow",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 37000,
+   "to": 42000,
+   "song": "sample-meadow",
+   "section": "c",
+   "line": 3
+  },
+  {
+   "from": 42000,
+   "to": 47000,
+   "song": "sample-meadow",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 47000,
+   "to": 52000,
+   "song": "sample-meadow",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 52000,
+   "to": 57000,
+   "song": "sample-meadow",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 57000,
+   "to": 62000,
+   "song": "sample-meadow",
+   "section": "c",
+   "line": 3
+  },
+  {
+   "from": 62000,
+   "to": 200800,
+   "song": null
+  }
+ ]
+}

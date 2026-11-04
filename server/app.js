@@ -40,7 +40,7 @@ export async function createApp({ env = process.env, fetchImpl = fetch, dataDir 
   const lyrics = createLyricsStore(lyricsDir);
   const allowedHosts = new Set(['localhost', '127.0.0.1', '::1', ...(env.ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)]);
   const deepgramKey = env.DEEPGRAM_API_KEY;
-  const listenUrl = deepgramListenUrl({ baseUrl: env.DEEPGRAM_URL, model: env.DEEPGRAM_MODEL, language: env.TRANSCRIPTION_LANGUAGE });
+  const listenUrl = (profile) => deepgramListenUrl({ baseUrl: env.DEEPGRAM_URL, model: env.DEEPGRAM_MODEL, language: env.TRANSCRIPTION_LANGUAGE, profile });
 
   const app = express();
   app.disable('x-powered-by');
@@ -151,7 +151,7 @@ export async function createApp({ env = process.env, fetchImpl = fetch, dataDir 
     } else if (pathname === '/ws/transcribe') {
       if (!local) return reject('403 Forbidden');
       transcribeSockets.handleUpgrade(request, socket, head, (ws) => {
-        handleTranscriptionClient(ws, { apiKey: deepgramKey, url: listenUrl, keepAliveMs });
+        handleTranscriptionClient(ws, { apiKey: deepgramKey, url: listenUrl(searchParams.get('profile') === 'music' ? 'music' : 'speech'), keepAliveMs });
       });
     } else {
       reject('404 Not Found');
