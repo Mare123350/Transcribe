@@ -17,7 +17,7 @@ npm start
 
 Then open **http://localhost:3000** on the operator computer.
 
-**To try it with no microphone or accounts:** press **Demo mode**, then **Open display window**, then **Play sample**. Demo mode plays sample transcripts through the real detection pipeline and shows real scripture. It's labelled on both the operator screen and the congregation screen.
+**To try it with no microphone or accounts:** press **Demo mode**, then **Open display**, then **Play sample**. Demo mode plays sample transcripts through the real detection pipeline and shows real scripture. It's labelled on both the operator screen and the congregation screen.
 
 With no configuration at all you get:
 
@@ -28,7 +28,7 @@ With no configuration at all you get:
 ## Setting up for a service
 
 1. **Choose your transcription** (see the next section).
-2. Press **Open display window**, drag that window to the projector, and press **F** for fullscreen.
+2. Press **Open display**, drag that window to the projector, and press **F** for fullscreen.
 3. Pick **Review** or **Automatic** mode, and a default Bible version.
 4. Choose your audio input and press **Start**. The browser will ask for microphone access.
 
@@ -99,6 +99,82 @@ Other useful controls:
 - **‹ Verse / Verse ›** moves through the text in the preview. **‹ Page / Page ›** (or the arrow keys) turns the page, which is immediate if that passage is on screen.
 - The passage on screen stays until you send another or press **Clear screen**.
 
+## Worship lyrics
+
+Transcribe can also follow a live choir and show the current lyrics. It doesn't use audio fingerprinting, which matches studio recordings. It matches what it hears against your own song library.
+
+**To try it:** press **Demo mode**, then **Worship**, choose the **Worship set** sample, and press **Play sample**. The demo uses clearly fake sample songs.
+
+### Setting up
+1. **Songs** opens the library. Paste lyrics with labels such as `[Verse 1]` and `[Chorus]`, or import OpenLyrics files. A bare `[Chorus]` later in the text means "repeat it here". Each line of text is one line on screen.
+2. On the **Setlists** tab, build the service and press **Use for this service**. Setlist songs are searched first, and the full library only if nothing in the setlist matches.
+3. Under **Display and credit settings**, add your CCLI licence number and choose one or two lines on screen.
+
+No lyrics ship with the app, apart from the fake samples. Your library lives in `library/lyrics.json` on this computer, with earlier versions in `library/backups/`, and is gitignored. **Export all** downloads a copy. Only add lyrics your church is licensed to use.
+
+For worship, use **Deepgram**. Browser speech recognition handles singing poorly and can't use the choir's input. A feed from the mixing desk with vocals up will work far better than a room microphone.
+
+### What it's listening for
+
+| Mode | Lyrics | Bible references |
+| --- | --- | --- |
+| **Sermon** | Off | Normal |
+| **Worship** | Followed | Only offered as quick mentions |
+| **Auto-detect** | Used as evidence, followed once worship is established | Normal during a sermon, quick mentions during worship |
+
+**Review** and **Automatic** still decide who approves what goes up. In Review, a confident song match waits for **Confirm**; after that, lines follow automatically. In Automatic, a confident match goes straight up. In both, anything less certain is offered as up to three suggestions and nothing changes on screen.
+
+### Bible references during worship
+Each reference heard during worship is sorted into one of three cases:
+
+- **Part of a song:** ignored.
+- **A quick mention**, like "as Psalm 23 reminds us": a card marked *Mentioned during worship*. It never goes up by itself, even in Automatic. **Show briefly** puts it up, and **Back to lyrics** returns to the song at the current line.
+- **Actual preaching:** more than a minute of speech at talking pace with almost no lyrics. Worship mode asks whether to switch to Sermon. Auto-detect switches by itself.
+
+### Staying in control
+- Moving a line, jumping to a section, or blanking the screen pauses auto-follow. Automation won't touch the screen again until you press **Resume auto-follow**. The tracker keeps listening in the background, so resuming catches up with the singing.
+- A song you pick yourself can't be replaced or cleared by automation. You'll only see suggestions and notices.
+- Everything works by hand with transcription off or failed.
+- With no singing heard for 30 seconds, lyrics come off the screen and return if the song resumes. After 75 seconds the song is treated as over.
+
+### Testing with transcripts
+A replay harness runs timestamped transcripts through the real detection code with no microphone:
+
+```bash
+npm run replay                                        # all samples in test/fixtures/replay/
+npm run replay -- my-service.json --songs library/lyrics.json
+npm run replay -- --set autoThreshold=0.65 --auto     # try a threshold; --auto simulates Auto-detect
+```
+
+It reports time to detect each song, wrong detections, and line-tracking accuracy. A transcript file looks like this, and `truth` is what was really being sung:
+
+```json
+{
+  "name": "sunday-choir",
+  "setlist": ["song-id"],
+  "events": [{ "t": 12000, "final": "text the engine produced" }],
+  "truth": [{ "from": 10000, "to": 15000, "song": "song-id", "section": "v1", "line": 0 }]
+}
+```
+
+The sample transcripts are synthetic, generated by `scripts/make-replay-fixtures.mjs`.
+
+### Tuning
+Every number is in [shared/lyrics/config.js](shared/lyrics/config.js), with a comment. **The defaults were tuned on synthetic transcripts, not a real choir, so expect to adjust them.** Try a change with `npm run replay -- --set name=value`. To keep it, stop the app, add it under `settings` → `thresholds` in `library/lyrics.json` (for example `"thresholds": { "autoThreshold": 0.65 }`), and start the app again.
+
+| What you're seeing | Try changing |
+| --- | --- |
+| Songs take too long to be detected | Lower `autoThreshold` or `scoreScale`; lower `minLineCoverage` if the transcript is poor |
+| The wrong song gets proposed | Raise `autoThreshold` or `minDistinctLines` |
+| Too many weak suggestions | Raise `suggestThreshold` |
+| The line lags behind the choir | Lower `advanceCoverage` |
+| The line jumps around | Raise `jumpCoverage`, `strongJumpCoverage` or `strongJumpWords` |
+| Lost after a missed line | Raise `skipAheadLines`, or lower `skipCoverage` |
+| Lyrics vanish during instrumental breaks | Raise `staleClearMs` and `songEndMs` |
+| Lyrics stay up too long after a song | Lower `staleClearMs` |
+| Auto-detect switches too slowly or eagerly | Change `worshipSustainMs` and `sermonSustainMs` |
+| Singing gets flagged as preaching | Raise `sermonMinWordsPerMinute` |
+
 ## Privacy
 
 - Audio is never saved by this app.
@@ -133,7 +209,9 @@ The verse tables for API-based versions come from the KJV, because verse counts 
 ## Tests
 
 ```bash
-npm test
+npm test                 # unit and integration tests
+npm run test:browser     # end-to-end checks in real Chrome, with a fake mic and stand-in Deepgram
+npm run replay           # lyric detection against sample transcripts
 ```
 
 The tests cover spoken-number normalization, numbered books, verse ranges, segmented transcripts, duplicate detection, invalid references, ordinary speech that shouldn't trigger, Bible providers, the Deepgram relay, the display hub, and pagination. Network services are replaced with stand-ins, and timing tests use a simulated clock.
@@ -149,10 +227,12 @@ The tests cover spoken-number normalization, numbered books, verse ranges, segme
 
 ```
 server/         Express server, Bible providers, Deepgram relay, display hub
-shared/         Detection pipeline, used by the browser and the tests
+shared/         Detection pipelines, used by the browser and the tests
+shared/lyrics/  Song model, matching, position tracking, replay
 public/         Operator dashboard and congregation display
 data/           Bundled public-domain Bibles
-scripts/        Rebuilds data/
+library/        Your songs and setlists (created on first save, gitignored)
+scripts/        Rebuilds data/, generates and replays transcripts
 test/           Automated tests
 ```
 
@@ -163,6 +243,6 @@ test/           Automated tests
 | Inputs show as "Audio input 1" | Press **Allow microphone to list inputs** |
 | Microphone blocked | Click the icon in the address bar, allow the microphone, and press Start |
 | Can't choose an input | Browser speech recognition always uses the system default. Change it in system settings, or set up Deepgram |
-| "No screens connected" | Press **Open display window**. A pop-up blocker may have stopped it |
+| "No screens" | Press **Open display**. A pop-up blocker may have stopped it |
 | A version is greyed out | It isn't configured. Hover over it to see what's needed |
 | Port already in use | Set `PORT=3001` in `.env` |

@@ -8,7 +8,7 @@ import { LyricsEngine } from './engine.js';
 import { SAMPLE_SONGS } from './sampleSongs.js';
 import { arrangementOf } from './songs.js';
 
-export function runReplay(fixture, { thresholds, library: libraryOption } = {}) {
+export function runReplay(fixture, { thresholds, library: libraryOption, autoDetect = false } = {}) {
   const library = libraryOption ?? fixture.songs ?? SAMPLE_SONGS;
   const byId = new Map(library.map((song) => [song.id, song]));
   const setlist = (fixture.setlist ?? []).map((id) => byId.get(id)).filter(Boolean);
@@ -17,6 +17,7 @@ export function runReplay(fixture, { thresholds, library: libraryOption } = {}) 
   const locks = [];
   const clears = [];
   const positions = [];
+  const switches = [];
   const engine = new LyricsEngine({
     thresholds,
     now: () => time,
@@ -27,12 +28,15 @@ export function runReplay(fixture, { thresholds, library: libraryOption } = {}) 
       } else if (event.type === 'songChange') {
         engine.lock(event.songId, { index: event.startIndex });
         locks.push({ t: time, song: event.songId });
+      } else if (event.type === 'activity') {
+        switches.push({ t: time, activity: event.activity });
       } else if (event.type === 'quiet' || event.type === 'ended') {
         clears.push({ t: time, type: event.type });
       }
     },
   });
   engine.setSongs({ setlist, library });
+  engine.setAutoDetect(autoDetect);
 
   const truthAt = (t) => (fixture.truth ?? []).find((span) => t >= span.from && t <= span.to) ?? null;
   const end = Math.max(0, ...fixture.events.map((e) => e.t)) + (fixture.tailMs ?? 90_000);
@@ -85,6 +89,7 @@ export function runReplay(fixture, { thresholds, library: libraryOption } = {}) 
     songs,
     locks,
     clears,
+    switches,
     wrongDetections: wrong.length,
     wrong,
     missed: songs.length - detected.length,

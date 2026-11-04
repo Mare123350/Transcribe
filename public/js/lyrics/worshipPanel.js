@@ -34,8 +34,10 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     candidates: [],
     readySongId: null,
     autoFollow: true,
+    verseHeld: false, // the operator put a verse up with no song loaded, so automation leaves it alone
     hiddenBySilence: false, // automation took lyrics down, so it may put them back
     notice: '',
+    songSource: '', // how this song came to be loaded, shown to the operator
   };
 
   const engine = new LyricsEngine({ onEvent: handleEngineEvent });
@@ -47,7 +49,7 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
       renderSetlist();
       refreshSongs();
     },
-    onLoadSong: (song) => loadSong(song),
+    onLoadSong: (song) => chooseSong(song),
     getSettings: () => state.settings,
     onSettingsChanged: (settings) => {
       state.settings = settings;
@@ -125,6 +127,8 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     document.querySelectorAll('[data-service]').forEach((button) => {
       button.setAttribute('aria-checked', String(button.dataset.service === state.serviceMode));
     });
+    $('activity-status').hidden = state.serviceMode !== 'auto';
+    $('activity-status').textContent = `Hearing: ${engine.activity}`;
     const { song, arrangement, index } = state;
     $('song-now').hidden = !song;
     const flag = $('worship-state');
@@ -139,6 +143,7 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     follow.textContent = !state.autoFollow ? 'Manual' : (listening ? 'Following' : 'Not listening');
     follow.dataset.kind = state.autoFollow && listening ? 'live' : 'unsent';
     $('follow-toggle').textContent = state.autoFollow ? 'Pause auto-follow' : 'Resume auto-follow';
+    $('song-source').textContent = state.songSource;
     $('song-notice').textContent = state.notice;
     $('song-notice').hidden = !state.notice;
     $('song-title').textContent = song.title;
@@ -205,8 +210,11 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
 
   // The operator picked this song themselves, so automation can't replace it.
   function chooseSong(song, index = 0) {
+    state.verseHeld = false;
     engine.lock(song.id, { index, byOperator: true });
     loadSong(song, index);
+    state.songSource = 'Chosen by you, so automation will not replace it.';
+    render();
   }
 
   function closeSong() {
@@ -223,9 +231,11 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
   function confirmCandidate(candidate) {
     const song = songById(candidate.songId);
     if (!song) return;
+    state.verseHeld = false;
     const index = engine.startIndexFor(candidate);
     engine.lock(song.id, { index });
     loadSong(song, index);
+    state.songSource = `Detected at ${Math.round(candidate.confidence * 100)}% confidence${candidate.scope === 'setlist' ? ', from the setlist' : ', from the library'}.`;
     state.onScreen = true;
     refreshScreen();
   }
@@ -245,7 +255,8 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
   }
 
   function offerOrAccept(event) {
-    if (getApprovalMode() === 'automatic') {
+    // A verse the operator chose stays up until they move on from it.
+    if (getApprovalMode() === 'automatic' && !state.interrupted && !state.verseHeld) {
       confirmCandidate(event);
     } else {
       state.readySongId = event.songId;
@@ -308,6 +319,19 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
           render();
         }
         break;
+      case 'activity':
+        render();
+        break;
+      case 'preaching':
+        // In Worship mode the operator chose the mode, so this is only ever a suggestion.
+        if (event.likely && state.serviceMode === 'worship') {
+          showMessage('preaching', 'This sounds like preaching rather than worship.', {
+            action: { label: 'Switch to Sermon', run: () => setServiceMode('sermon') },
+          });
+        } else if (!event.likely) {
+          clearMessage('preaching');
+        }
+        break;
       case 'songChange':
         // Never replace a song the operator chose or is controlling. Just offer the new one.
         if (event.byOperator || !state.autoFollow) {
@@ -350,6 +374,8 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     try {
       localStorage.setItem(SERVICE_KEY, mode);
     } catch { /* the mode just won't persist */ }
+    engine.setAutoDetect(mode === 'auto');
+    clearMessage('preaching');
     if (mode === 'sermon') {
       state.candidates = [];
       state.readySongId = null;
@@ -359,7 +385,7 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
     render();
   }
 
-  const route = () => routeFor(state.serviceMode);
+  const route = () => routeFor(state.serviceMode, engine.activity);
 
   function bind() {
     library.bind();
@@ -406,6 +432,7 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
       try {
         state.settings = await getLyricsSettings();
         engine.setThresholds(state.settings.thresholds);
+        engine.setAutoDetect(state.serviceMode === 'auto');
       } catch (error) {
         showMessage('library', `Couldn't load lyrics settings: ${error.message}`, { kind: 'error' });
       }
@@ -442,14 +469,16 @@ export function createWorshipPanel({ showOnScreen, clearScreen, showMessage, cle
       };
     },
 
-    // A Bible passage went on screen.
-    noteOtherContentShown() {
+    // A Bible passage went on screen. `automatic` means the app did it, not the operator.
+    noteOtherContentShown({ automatic = false } = {}) {
       if (state.onScreen && state.song) state.interrupted = true;
+      if (!automatic && !state.song) state.verseHeld = true;
       state.onScreen = false;
       render();
     },
     noteBlanked() {
       takeManualControl();
+      state.verseHeld = false;
       state.onScreen = false;
       render();
     },

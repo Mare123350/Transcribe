@@ -1,5 +1,5 @@
 // Runs transcript files through lyric detection with no microphone.
-//   node scripts/replay-lyrics.mjs [files or folders] [--set name=value] [--songs library.json] [--json]
+//   node scripts/replay-lyrics.mjs [files or folders] [--set name=value] [--songs library.json] [--auto] [--json]
 // With no files, runs everything in test/fixtures/replay/.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,6 +11,7 @@ const thresholds = {};
 const paths = [];
 let library;
 let asJson = false;
+let autoDetect = false;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--set') {
     const [name, value] = args[++i].split('=');
@@ -22,6 +23,8 @@ for (let i = 0; i < args.length; i++) {
   } else if (args[i] === '--songs') {
     const parsed = JSON.parse(readFileSync(args[++i], 'utf8'));
     library = parsed.songs ?? parsed;
+  } else if (args[i] === '--auto') {
+    autoDetect = true;
   } else if (args[i] === '--json') {
     asJson = true;
   } else {
@@ -33,7 +36,7 @@ const expand = (path) => (statSync(path).isDirectory()
   ? readdirSync(path).filter((name) => name.endsWith('.json')).sort().map((name) => join(path, name))
   : [path]);
 const files = (paths.length ? paths : [new URL('../test/fixtures/replay', import.meta.url).pathname]).flatMap(expand);
-const results = files.map((file) => runReplay(JSON.parse(readFileSync(file, 'utf8')), { thresholds, library }));
+const results = files.map((file) => runReplay(JSON.parse(readFileSync(file, 'utf8')), { thresholds, library, autoDetect }));
 
 if (asJson) {
   console.log(JSON.stringify(results, null, 2));
@@ -49,6 +52,7 @@ if (asJson) {
     'Line exact': percent(r.lineExact),
     'Within 1 line': percent(r.lineClose),
     'Lyrics up with no song': seconds(r.staleMs),
+    'Mode switches': r.switches.map((s) => `${s.activity} ${seconds(s.t)}`).join(', ') || '–',
   }));
   console.table(rows);
   for (const r of results) {

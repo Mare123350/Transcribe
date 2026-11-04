@@ -1,5 +1,6 @@
 // Lyric detection without any browser or timer code, so the live app and the replay harness run
 // exactly the same logic. Feed it final transcript results and call tick() regularly.
+import { ActivityClassifier } from './activityClassifier.js';
 import { resolveThresholds } from './config.js';
 import { PositionTracker } from './positionTracker.js';
 import { SongDetector } from './songDetector.js';
@@ -12,9 +13,18 @@ export class LyricsEngine {
     this.now = now;
     this.onEvent = onEvent;
     this.detector = new SongDetector({ thresholds: this.t, now });
+    this.classifier = new ActivityClassifier({ thresholds: this.t, now });
     this.locked = null;
-    this.lastProposal = null;
     this.lastLyricShare = 0;
+    this.autoDetect = false; // when on, songs are only proposed once worship is established
+  }
+
+  get activity() {
+    return this.classifier.activity;
+  }
+
+  setAutoDetect(on) {
+    this.autoDetect = on;
   }
 
   setSongs(songs) {
@@ -24,20 +34,28 @@ export class LyricsEngine {
   setThresholds(thresholds) {
     this.t = resolveThresholds(thresholds);
     this.detector.t = this.t;
+    this.classifier.t = this.t;
   }
 
   addFinal({ text, words }) {
     const tokens = cleanTranscript(text, { words, minWordConfidence: this.t.minWordConfidence, maxPhraseRepeats: this.t.maxPhraseRepeats });
     if (!tokens.length) return { lyricShare: 0, tokens };
-    const { candidates, lyricShare } = this.detector.update(tokens);
+    const { candidates, lyricShare, fresh } = this.detector.update(tokens);
     this.lastLyricShare = lyricShare;
+    const verdict = this.classifier.add(fresh);
+    if (verdict.changed) this.onEvent({ type: 'activity', activity: verdict.activity });
+    if (verdict.preachingChanged) this.onEvent({ type: 'preaching', likely: verdict.preachingLikely });
     this.afterUpdate(tokens, candidates);
     return { lyricShare, tokens };
   }
 
   afterUpdate(tokens, candidates) {
     const at = this.now();
-    const others = candidates.filter((c) => c.songId !== this.locked?.songId);
+    // In Auto-detect during a sermon, this keeps gathering evidence but offers the operator nothing.
+    const quietForSermon = this.autoDetect && this.activity !== 'worship';
+    // With a song already locked, only a real contender is worth the operator's attention.
+    const others = quietForSermon ? [] : candidates.filter((c) => c.songId !== this.locked?.songId
+      && (!this.locked || c.confidence >= this.t.suggestThreshold));
     this.onEvent({ type: 'candidates', candidates: others });
 
     if (!this.locked) {

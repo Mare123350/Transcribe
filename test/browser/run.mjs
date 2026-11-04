@@ -18,7 +18,7 @@ let pass=0,fail=0; const ok=(c,m,x='')=>{ if(c){pass++;console.log('  ok  ',m)} 
 // Fake Deepgram
 const frames=[]; let dgConns=0; const socks=[];
 const h=createServer(); const wss=new WebSocketServer({server:h});
-wss.on('connection',s=>{dgConns++;socks.push(s);let n=0;s.on('message',(d,b)=>{ if(b){frames.push(d); n++; if(n===15) s.send(JSON.stringify({type:'Results',is_final:false,channel:{alternatives:[{transcript:'turn with me to Romans'}]}})); if(n===25) s.send(JSON.stringify({type:'Results',is_final:true,channel:{alternatives:[{transcript:'turn with me to Romans eight twenty eight.'}]}})); if(n===40) s.send(JSON.stringify({type:'Results',is_final:true,channel:{alternatives:[{transcript:'and all things work together.'}]}})); }});});
+const dgUrls=[];wss.on('connection',(s,req)=>{dgUrls.push(req.url);dgConns++;socks.push(s);let n=0;s.on('message',(d,b)=>{ if(b){frames.push(d); n++; if(n===15) s.send(JSON.stringify({type:'Results',is_final:false,channel:{alternatives:[{transcript:'turn with me to Romans'}]}})); if(n===25) s.send(JSON.stringify({type:'Results',is_final:true,channel:{alternatives:[{transcript:'turn with me to Romans eight twenty eight.'}]}})); if(n===40) s.send(JSON.stringify({type:'Results',is_final:true,channel:{alternatives:[{transcript:'and all things work together.'}]}})); }});});
 await new Promise(r=>h.listen(3199,r));
 const srv=spawn('node',['server/index.js'],{cwd:P,env:{...process.env,LYRICS_DIR:LYRICS,PORT:'3100',DEEPGRAM_API_KEY:'x',DEEPGRAM_URL:'ws://127.0.0.1:3199/v1/listen'},stdio:'pipe'});
 globalThis.__srv=srv;await sleep(900);
@@ -157,6 +157,14 @@ ok((await op.locator('.card-ref').first().textContent())==='Romans 8:28','speech
 ok(frames.length>10 && frames[0].length===3200,'PCM frames 100ms @16k',frames[0]?.length);
 const pcm=new Int16Array(frames[5].buffer,frames[5].byteOffset,1600); const peak=Math.max(...pcm.map(Math.abs)); console.log('   peak',peak);
 ok(peak>50,'audio not silent');
+ok(/endpointing=300/.test(dgUrls.at(-1)),'sermon mode uses speech settings');
+await op.click('[data-service=worship]'); await sleep(900);
+ok(/endpointing=500/.test(dgUrls.at(-1)),'switching to worship while listening reconnects with music settings');
+const beforeSwitch=frames.length; await sleep(600);
+ok(frames.length>beforeSwitch,'audio keeps flowing after the switch');
+ok((await op.locator('#listen-text').textContent())==='LISTENING','still listening after the switch');
+await op.click('[data-service=sermon]'); await sleep(900);
+ok(/endpointing=300/.test(dgUrls.at(-1)),'switching back restores speech settings');
 await op.click('#pause'); await sleep(400); const c1=frames.length; await sleep(600);
 ok(frames.length===c1,'pause stops audio frames');
 ok((await op.locator('#listen-text').textContent()).startsWith('Paused'),'paused label');
@@ -287,6 +295,7 @@ async function runDetection(){
   await op.locator('.suggestion-confirm').first().click(); await sleep(200);
   ok((await op.locator('#song-title').textContent()).includes('Lantern'),'confirm loads the song');
   ok((await dp.locator('.stage').getAttribute('data-kind'))==='lyrics','confirm puts lyrics up');
+  ok(/Detected at \d+% confidence/.test(await op.locator('#song-source').textContent()),'confidence is shown for the locked song');
   await op.waitForFunction(()=>document.querySelector('#song-current').textContent.includes('fog')||document.querySelector('#song-current').textContent.includes('shore'),null,{timeout:20000});
   ok((await dp.locator('.lyric-current').textContent())===(await op.locator('#song-current').textContent()),'auto-follow moves the display with the singing');
   await op.screenshot({path:SH+'/32-following.png'});
@@ -337,9 +346,21 @@ async function runDetection(){
   await finished();
   await fetch('http://localhost:3100/api/lyrics-settings',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({thresholds:{}})});
   await op.click('#song-close').catch(()=>{}); await sleep(200);
+  console.log('— Auto-detect');
+  await op.goto('http://localhost:3100/?demo'); await sleep(500);
+  await op.click('[data-mode=automatic]'); await op.click('[data-service=auto]');
+  ok((await op.locator('#activity-status').textContent())==='Hearing: sermon','starts assuming a sermon');
+  await op.fill('#search-input','Romans 8:28'); await op.press('#search-input','Enter'); await sleep(250); await op.click('#send'); await sleep(250);
+  await playDemo('worship'); await sleep(2000);
+  ok((await dref())==='Romans 8:28','a brief match does not interrupt what is on screen');
+  ok(await op.locator('.suggestion').count()===0,'nothing is suggested during a sermon');
+  await op.click('#stop'); await sleep(200);
+  await op.click('[data-service=sermon]');
+  await op.click('#clear-screen'); await sleep(150);
   console.log('— Worship in Automatic');
   await op.goto('http://localhost:3100/?demo'); await sleep(500);
   await op.click('[data-mode=automatic]');
+  await op.click('[data-service=worship]');
   await playDemo('worship');
   await op.waitForFunction(()=>document.querySelector('#song-title')?.textContent.includes('Lantern'),null,{timeout:30000});
   await sleep(100);

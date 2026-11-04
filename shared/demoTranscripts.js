@@ -52,7 +52,7 @@ export const DEMO_TRANSCRIPTS = [
   {
     id: 'worship',
     title: 'Worship set',
-    description: 'A choir singing a sample song, with a verse mentioned between sections. Choose Worship above first.',
+    description: 'A choir singing a sample song, with a verse mentioned between sections. Choose Worship or Auto-detect above first.',
     lines: [
       { say: 'Good morning church, let us stand and worship together.', pause: 1500 },
       { say: 'A lantern drifts across the silver water' },
