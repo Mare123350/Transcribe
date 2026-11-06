@@ -13,7 +13,16 @@
     <h1 class="brand"><img src="/img/logo.svg" alt="" width="28" height="28"><span>Transcribe</span></h1>
 
     <div class="field-inline">
-      <span class="label" id="mode-label">Mode</span>
+      <span class="visually-hidden" id="service-label">Listening for</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="service-label">
+        <button type="button" role="radio" data-service="sermon" title="Detect Bible references only">Sermon</button>
+        <button type="button" role="radio" data-service="worship" title="Follow songs. Bible references are only offered as quick mentions">Worship</button>
+        <button type="button" role="radio" data-service="auto" title="Works out from sustained evidence whether this is worship or a sermon">Auto-detect</button>
+      </div>
+    </div>
+
+    <div class="field-inline">
+      <span class="visually-hidden" id="mode-label">Approval</span>
       <div class="segmented" role="radiogroup" aria-labelledby="mode-label">
         <button type="button" role="radio" data-mode="review" title="Detected references wait for your approval">Review</button>
         <button type="button" role="radio" data-mode="automatic" title="Validated, unambiguous references go straight to the screen">Automatic</button>
@@ -21,15 +30,16 @@
     </div>
 
     <label class="field-inline">
-      <span class="label">Default version</span>
+      <span class="label">Version</span>
       <select id="default-translation"></select>
     </label>
 
     <div class="topbar-spacer"></div>
 
     <span id="screens-pill" class="pill">No screens</span>
-    <button type="button" id="open-display" class="button">Open display window</button>
+    <button type="button" id="open-display" class="button">Open display</button>
     <button type="button" id="demo-toggle" class="button" aria-pressed="false">Demo mode</button>
+    <button type="button" id="open-library" class="button">Songs</button>
     <button type="button" id="open-settings" class="button">Privacy</button>
   </header>
 
@@ -106,6 +116,47 @@
           <button type="submit" class="button">Preview</button>
         </form>
         <p id="search-error" class="field-error" hidden></p>
+      </section>
+
+      <section id="worship-panel" class="panel" aria-labelledby="worship-title">
+        <header class="panel-head">
+          <h2 id="worship-title">Worship lyrics</h2>
+          <span id="activity-status" class="flag" hidden></span>
+          <span id="worship-state" class="flag" hidden></span>
+        </header>
+        <form id="song-find" class="inline-form">
+          <input id="song-find-input" type="search" list="song-find-list" aria-label="Find a song" placeholder="Find a song in the library" autocomplete="off">
+          <datalist id="song-find-list"></datalist>
+          <button type="submit" class="button">Load</button>
+        </form>
+        <div id="song-suggestions" class="song-suggestions" hidden></div>
+        <div id="setlist-strip" class="setlist-strip" hidden>
+          <span class="label" id="setlist-strip-name"></span>
+          <div id="setlist-chips" class="chips" role="group" aria-label="Songs in this service"></div>
+        </div>
+        <div id="song-now" class="song-now" hidden>
+          <div class="song-heading">
+            <div class="song-title" id="song-title"></div>
+            <span id="follow-status" class="flag"></span>
+          </div>
+          <p id="song-source" class="note"></p>
+          <p id="song-notice" class="note" hidden></p>
+          <div class="song-lines">
+            <p class="song-line-label">Now</p><p id="song-current" class="song-current"></p>
+            <p class="song-line-label">Next</p><p id="song-next" class="song-next"></p>
+          </div>
+          <div id="section-chips" class="chips" role="group" aria-label="Jump to a section"></div>
+          <div class="song-controls">
+            <button type="button" id="line-prev" class="button">‹ Line</button>
+            <button type="button" id="line-next" class="button">Line ›</button>
+            <button type="button" id="lyrics-show" class="button button-primary">Show on screen</button>
+            <button type="button" id="lyrics-blank" class="button">Blank</button>
+            <button type="button" id="follow-toggle" class="button">Pause auto-follow</button>
+            <button type="button" id="song-wrong" class="button">Wrong song</button>
+            <button type="button" id="song-next-song" class="button" hidden>Next song ›</button>
+            <button type="button" id="song-close" class="link">Close song</button>
+          </div>
+        </div>
       </section>
 
       <section class="panel panel-grow" aria-labelledby="cards-title">
@@ -198,6 +249,82 @@
       </ul>
       <div class="dialog-actions"><button class="button button-primary" value="close">Done</button></div>
     </form>
+  </dialog>
+
+  <dialog id="library" class="dialog dialog-wide" aria-labelledby="library-title">
+    <div class="library-head">
+      <h2 id="library-title">Song library</h2>
+      <button type="button" id="library-close" class="button">Close</button>
+    </div>
+    <div class="segmented library-tabs" role="tablist">
+      <button type="button" role="tab" id="tab-songs" aria-selected="true" aria-checked="true">Songs</button>
+      <button type="button" role="tab" id="tab-setlists" aria-selected="false" aria-checked="false">Setlists</button>
+    </div>
+    <div id="setlists-pane" class="library-body" hidden>
+      <div class="library-list-pane">
+        <div class="library-actions"><button type="button" id="setlist-new" class="button button-primary">New setlist</button></div>
+        <ul id="setlist-list" class="library-list"></ul>
+      </div>
+      <form id="setlist-editor" class="song-editor" hidden>
+        <div class="song-editor-grid">
+          <label class="field"><span class="label">Name</span><input id="setlist-name" type="text" placeholder="Sunday morning"></label>
+          <label class="field"><span class="label">Date</span><input id="setlist-date" type="date"></label>
+        </div>
+        <div class="field">
+          <span class="label">Songs, in the order you expect them</span>
+          <ol id="setlist-items" class="setlist-items"></ol>
+        </div>
+        <div class="inline-form">
+          <input id="setlist-add-input" type="search" list="song-find-list" aria-label="Add a song" placeholder="Add a song from the library" autocomplete="off">
+          <button type="button" id="setlist-add" class="button">Add</button>
+        </div>
+        <p id="setlist-error" class="field-error" hidden></p>
+        <div class="library-actions">
+          <button type="submit" class="button button-primary">Save setlist</button>
+          <button type="button" id="setlist-use" class="button">Use for this service</button>
+          <button type="button" id="setlist-delete" class="button button-danger-quiet">Delete</button>
+        </div>
+      </form>
+      <div id="setlist-empty" class="song-editor-empty">Build a setlist for each service. Songs in the active setlist are searched first when listening.</div>
+    </div>
+    <div id="songs-pane" class="library-body">
+      <div class="library-list-pane">
+        <input id="library-search" type="search" aria-label="Search songs" placeholder="Search titles, artists and lyrics" autocomplete="off">
+        <div class="library-actions">
+          <button type="button" id="song-new" class="button button-primary">New song</button>
+          <label class="button file-button">Import OpenLyrics<input id="song-import" type="file" accept=".xml,.txt,application/xml,text/xml" multiple class="visually-hidden"></label>
+          <a class="button" href="/api/lyrics-export" download>Export all</a>
+        </div>
+        <ul id="library-list" class="library-list"></ul>
+      </div>
+      <form id="song-editor" class="song-editor" hidden>
+        <div class="song-editor-grid">
+          <label class="field"><span class="label">Title</span><input id="song-field-title" type="text" required></label>
+          <label class="field"><span class="label">Artist</span><input id="song-field-artist" type="text"></label>
+          <label class="field"><span class="label">Language</span><input id="song-field-language" type="text"></label>
+          <label class="field"><span class="label">CCLI number (optional)</span><input id="song-field-ccli" type="text"></label>
+        </div>
+        <label class="field"><span class="label">Section order (optional), like: v1 c v2 c b c</span><input id="song-field-order" type="text"></label>
+        <label class="field song-lyrics-field"><span class="label">Lyrics. Paste text with labels such as [Verse 1] and [Chorus]. One line of text is one line on screen.</span>
+          <textarea id="song-field-lyrics" spellcheck="false"></textarea></label>
+        <p id="song-editor-error" class="field-error" hidden></p>
+        <div class="library-actions">
+          <button type="submit" class="button button-primary">Save song</button>
+          <button type="button" id="song-load" class="button">Load for service</button>
+          <button type="button" id="song-delete" class="button button-danger-quiet">Delete</button>
+        </div>
+      </form>
+      <div id="song-editor-empty" class="song-editor-empty">Choose a song, or create a new one. Only add lyrics your church is licensed to use.</div>
+    </div>
+    <details class="library-settings">
+      <summary>Display and credit settings</summary>
+      <div class="song-editor-grid">
+        <label class="field"><span class="label">CCLI licence number</span><input id="setting-license" type="text"></label>
+        <label class="field"><span class="label">Lines on screen</span><select id="setting-lines"><option value="1">1</option><option value="2">2</option></select></label>
+        <label class="check-inline"><input id="setting-credit" type="checkbox"> Show song credit</label>
+        <label class="check-inline"><input id="setting-highlight" type="checkbox"> Highlight the current line</label>
+      </div>
+    </details>
   </dialog>
 
   <template id="card-template">

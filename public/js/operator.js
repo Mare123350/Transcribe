@@ -1,5 +1,6 @@
 // The operator dashboard: wires the transcript sources, the detector, Bible lookups, and the screen.
 import { ApiError, getConfig, getPassage, getVersification, publishDisplay, saveTranscript } from '/js/api.js';
+import { createWorshipPanel } from '/js/lyrics/worshipPanel.js';
 import { createPaginator, createStage, fitStage, renderStage } from '/js/stage.js';
 import { DeepgramSource } from '/js/transcription/deepgramSource.js';
 import { DemoSource } from '/js/transcription/demoSource.js';
@@ -143,7 +144,10 @@ async function useDefaultTranslation(id) {
 
 const detector = new ReferenceDetector({
   versification: { exact: false, books: {} },
-  onDetection: addDetection,
+  onDetection: (found) => {
+    const checked = worship ? worship.checkVerseDetection(found) : found;
+    if (checked) addDetection(checked);
+  },
   onRepeat: (found) => {
     const card = state.cards.find((c) => c.key === found.key);
     if (card) {
@@ -152,7 +156,8 @@ const detector = new ReferenceDetector({
     }
     highlightPhrase(found.phrase);
   },
-  onTentative: (found) => {
+  onTentative: (detected) => {
+    const found = worship?.isWorshipActive() ? [] : detected; // sung words shouldn't flicker up here
     const hearing = $('hearing');
     hearing.hidden = !found.length;
     hearing.replaceChildren();
@@ -210,7 +215,7 @@ function highlightPhrase(phrase) {
   renderTranscript();
 }
 
-function handleTranscript({ text, isFinal }) {
+function handleTranscript({ text, isFinal, words }) {
   if (isFinal) {
     interimText = '';
     if (text.trim()) {
@@ -223,6 +228,7 @@ function handleTranscript({ text, isFinal }) {
       }
     }
     renderTranscript();
+    worship?.onFinal({ text, words }); // first, so the verse check knows whether these were lyrics
     detector.addFinal(text);
   } else {
     interimText = text;
@@ -245,6 +251,7 @@ const LISTEN_TEXT = {
 function setListen(status) {
   state.listen = status;
   renderListen();
+  worship?.onListeningChanged();
 }
 
 function renderListen() {
@@ -317,7 +324,7 @@ async function start() {
       }
     }, 8000);
     try {
-      await source.start({ deviceId: $('device-select').value });
+      await source.start({ deviceId: $('device-select').value, profile: worship?.audioProfile() ?? 'speech' });
     } catch (error) {
       if (state.source !== source) return; // the operator already pressed Stop
       throw error;
@@ -400,6 +407,7 @@ function setDemo(on) {
   $('live-controls').hidden = on;
   $('demo-controls').hidden = !on;
   $('demo-description').textContent = DEMO_TRANSCRIPTS.find((d) => d.id === $('demo-select').value)?.description ?? '';
+  worship?.refreshSongs();
   renderListen();
 }
 
@@ -420,6 +428,7 @@ function addDetection(found) {
     lookup: found.status === 'invalid' ? 'none' : 'loading',
     sent: false,
     repeats: 0,
+    aside: Boolean(found.aside),
   };
   state.cards.unshift(card);
   state.cards.length = Math.min(state.cards.length, MAX_CARDS);
@@ -466,9 +475,9 @@ function afterCardReady(card) {
   }
   if (card.autoHandled) return;
   card.autoHandled = true;
-  if (prefs.mode === 'automatic' && card.status === 'confirmed') {
+  if (prefs.mode === 'automatic' && card.status === 'confirmed' && !card.aside) {
     setPreview(card.options[0], card.passage);
-    sendToScreen();
+    sendToScreen({ automatic: true });
     card.sent = true;
   } else if (!state.preview || isPreviewLive()) {
     // Queue up the newest reference so one press of Send puts it on screen, but never replace
@@ -480,6 +489,7 @@ function afterCardReady(card) {
 function badgeText(card) {
   if (card.sent) return 'Sent to screen';
   if (card.status === 'invalid') return 'Not found';
+  if (card.aside) return 'Mentioned during worship';
   if (card.status === 'suggestion') return 'Needs confirmation';
   return 'Confirmed';
 }
@@ -540,7 +550,7 @@ function renderCards() {
     const sendButton = node.querySelector('.card-send');
     sendButton.hidden = card.status === 'invalid';
     sendButton.disabled = !canUse;
-    sendButton.textContent = card.sent ? 'Send again' : 'Send to Screen';
+    sendButton.textContent = card.sent ? 'Send again' : (card.aside ? 'Show briefly' : 'Send to Screen');
     sendButton.addEventListener('click', () => {
       setPreview(cardRef(card), card.passage);
       sendToScreen();
@@ -601,7 +611,12 @@ function renderCards() {
 
 // ---- Preview and congregation screen ----
 
-const stageState = (entry) => (entry ? {
+const stageState = (entry) => (entry?.external ? {
+  ...entry.external,
+  fontPx: prefs.fontPx,
+  theme: prefs.theme,
+  demo: state.demo,
+} : entry ? {
   blank: false,
   reference: entry.passage.reference,
   translation: entry.passage.translation,
@@ -613,7 +628,7 @@ const stageState = (entry) => (entry ? {
   demo: entry.demo,
 } : { blank: true, theme: prefs.theme });
 
-const sameEntry = (a, b) => Boolean(a && b)
+const sameEntry = (a, b) => Boolean(a?.passage && b?.passage)
   && a.passage.reference === b.passage.reference
   && a.passage.translation.id === b.passage.translation.id;
 
@@ -677,8 +692,17 @@ function renderLive() {
   renderStage(liveStage, stageState(state.live));
 }
 
-function sendToScreen() {
+// The worship panel puts lyrics on the screen through here.
+function showExternal(content) {
+  state.live = { external: content };
+  renderLive();
+  renderPreview();
+  publish();
+}
+
+function sendToScreen({ automatic = false } = {}) {
   if (!state.preview) return;
+  worship?.noteOtherContentShown({ automatic });
   state.live = { ...state.preview };
   const entry = state.live;
   const latest = state.history[0];
@@ -692,6 +716,7 @@ function sendToScreen() {
 }
 
 function clearScreen() {
+  worship?.noteBlanked();
   state.live = null;
   renderLive();
   renderPreview();
@@ -744,7 +769,7 @@ function movePage(direction) {
 }
 
 function repaginate(entry) {
-  if (!entry) return;
+  if (!entry?.passage) return;
   const firstVerse = entry.pages[entry.page]?.[0]?.verse;
   entry.pages = paginator({ passage: entry.passage, reference: entry.passage.reference, fontPx: prefs.fontPx });
   const page = entry.pages.findLastIndex((p) => p[0].verse <= firstVerse);
@@ -801,7 +826,7 @@ function watchScreens() {
   socket.addEventListener('message', (event) => {
     const message = JSON.parse(event.data);
     if (message.type !== 'screens') return;
-    pill.textContent = message.count === 1 ? '1 screen connected' : message.count ? `${message.count} screens connected` : 'No screens connected';
+    pill.textContent = message.count === 1 ? '1 screen' : message.count ? `${message.count} screens` : 'No screens';
     pill.dataset.ok = String(message.count > 0);
     if (message.count > 0) clearMessage('display');
   });
@@ -812,6 +837,10 @@ function watchScreens() {
     setTimeout(watchScreens, 2000);
   });
 }
+
+// ---- Worship lyrics ----
+
+let worship = null;
 
 // ---- Wiring ----
 
@@ -882,7 +911,7 @@ function bindEvents() {
     $('search-input').select();
   });
 
-  $('send').addEventListener('click', sendToScreen);
+  $('send').addEventListener('click', () => sendToScreen());
   $('clear-screen').addEventListener('click', clearScreen);
   $('prev-verse').addEventListener('click', () => moveVerse(-1));
   $('next-verse').addEventListener('click', () => moveVerse(1));
@@ -952,6 +981,23 @@ async function init() {
   renderLive();
   setDemo(new URLSearchParams(location.search).has('demo'));
   watchScreens();
+  worship = createWorshipPanel({
+    showOnScreen: showExternal,
+    clearScreen: () => {
+      state.live = null;
+      renderLive();
+      renderPreview();
+      publish();
+    },
+    isDemo: () => state.demo,
+    getApprovalMode: () => prefs.mode,
+    usesBrowserSpeech: () => !state.demo && $('source-select').value === 'webspeech',
+    onAudioProfileChange: (profile) => state.source?.setProfile?.(profile),
+    isListening: () => state.listen === 'listening',
+    showMessage,
+    clearMessage,
+  });
+  worship.init();
 }
 
 init();

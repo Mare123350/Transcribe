@@ -5,6 +5,8 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import { parseRefKey } from '../shared/references.js';
 import { createBibleRegistry } from './bible/registry.js';
+import { createLyricsRouter } from './lyrics/routes.js';
+import { createLyricsStore } from './lyrics/store.js';
 import { BibleError } from './bible/errors.js';
 import { DisplayHub } from './displayHub.js';
 import { deepgramListenUrl, handleTranscriptionClient } from './transcription/deepgramProxy.js';
@@ -31,13 +33,14 @@ function isTrustedRequest(request, allowedHosts) {
   return true;
 }
 
-export async function createApp({ env = process.env, fetchImpl = fetch, dataDir = join(root, 'data'), transcriptDir = join(root, 'saved-transcripts'), keepAliveMs } = {}) {
+export async function createApp({ env = process.env, fetchImpl = fetch, dataDir = join(root, 'data'), transcriptDir = join(root, 'saved-transcripts'), lyricsDir = env.LYRICS_DIR ?? join(root, 'library'), keepAliveMs } = {}) {
   const bible = await createBibleRegistry({ env, dataDir, fetchImpl });
   const hub = new DisplayHub();
   const transcripts = createTranscriptStore(transcriptDir);
+  const lyrics = createLyricsStore(lyricsDir);
   const allowedHosts = new Set(['localhost', '127.0.0.1', '::1', ...(env.ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)]);
   const deepgramKey = env.DEEPGRAM_API_KEY;
-  const listenUrl = deepgramListenUrl({ baseUrl: env.DEEPGRAM_URL, model: env.DEEPGRAM_MODEL, language: env.TRANSCRIPTION_LANGUAGE });
+  const listenUrl = (profile) => deepgramListenUrl({ baseUrl: env.DEEPGRAM_URL, model: env.DEEPGRAM_MODEL, language: env.TRANSCRIPTION_LANGUAGE, profile });
 
   const app = express();
   app.disable('x-powered-by');
@@ -108,6 +111,8 @@ export async function createApp({ env = process.env, fetchImpl = fetch, dataDir 
     }
   });
 
+  api.use(createLyricsRouter(lyrics));
+
   api.use((error, _request, response, next) => {
     if (response.headersSent) return next(error);
     if (error instanceof BibleError) {
@@ -146,7 +151,7 @@ export async function createApp({ env = process.env, fetchImpl = fetch, dataDir 
     } else if (pathname === '/ws/transcribe') {
       if (!local) return reject('403 Forbidden');
       transcribeSockets.handleUpgrade(request, socket, head, (ws) => {
-        handleTranscriptionClient(ws, { apiKey: deepgramKey, url: listenUrl, keepAliveMs });
+        handleTranscriptionClient(ws, { apiKey: deepgramKey, url: listenUrl(searchParams.get('profile') === 'music' ? 'music' : 'speech'), keepAliveMs });
       });
     } else {
       reject('404 Not Found');

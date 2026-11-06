@@ -27,5 +27,13 @@
 .stage-page { flex: none; font-size: 34px; font-weight: 700; color: var(--accent); }
 .stage-demo { position: absolute; top: 28px; right: 40px; font: 700 26px Arial, Helvetica, sans-serif; letter-spacing: 0.06em; padding: 6px 16px; border: 3px solid var(--muted); color: var(--muted); }
 
+.stage-lyrics { display: none; flex: 1 1 0; min-height: 0; flex-direction: column; justify-content: center; align-items: center; gap: 0.45em; overflow: hidden; text-align: center; font-size: var(--lyric-size, 85px); line-height: 1.2; }
+.lyric-line { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
+.stage[data-highlight='true'] .lyric-line:not(.lyric-current) { color: var(--muted); opacity: 0.62; }
+.stage[data-highlight='true'] .lyric-current { color: var(--accent); font-weight: 700; }
+.stage[data-kind='lyrics'] .stage-lyrics { display: flex; }
+.stage[data-kind='lyrics'] .stage-body, .stage[data-kind='lyrics'] .stage-reference { display: none; }
+.stage[data-kind='lyrics'] .stage-translation { font-size: 26px; font-weight: 400; }
+
 .stage[data-blank='true'] > * { visibility: hidden; }
 .stage-measure { position: absolute; left: -99999px; top: 0; visibility: hidden; pointer-events: none; }

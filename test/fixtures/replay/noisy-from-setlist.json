@@ -1,0 +1,251 @@
+{
+ "name": "noisy-from-setlist",
+ "setlist": [
+  "sample-lantern",
+  "sample-orchard",
+  "sample-meadow",
+  "sample-tide"
+ ],
+ "events": [
+  {
+   "t": 6800,
+   "final": "A lantern drift across the silver waters"
+  },
+  {
+   "t": 11800,
+   "final": "by evening tide and"
+  },
+  {
+   "t": 16800,
+   "final": "window on the harbor glowing"
+  },
+  {
+   "t": 21800,
+   "final": "all yeah the sellers tonight"
+  },
+  {
+   "t": 26800,
+   "final": "Sing out acros the morning bay"
+  },
+  {
+   "t": 31800,
+   "final": "sing unti the fog rolls away"
+  },
+  {
+   "t": 36800,
+   "final": "We will gather by the the open door"
+  },
+  {
+   "t": 41800,
+   "final": "Lifting up our voices on the shore"
+  },
+  {
+   "t": 46800,
+   "final": "a copper belt rings out above the liver"
+  },
+  {
+   "t": 51800,
+   "final": "shakin every bean"
+  },
+  {
+   "t": 56800,
+   "final": "Children runnin through the wheat and the clover"
+  },
+  {
+   "t": 61800,
+   "final": "Following the currant of the scream"
+  },
+  {
+   "t": 66800,
+   "final": "Sing out across the morning bay oh"
+  },
+  {
+   "t": 71800,
+   "final": "Sing until fog rolls away"
+  },
+  {
+   "t": 81800,
+   "final": "Lifting up our voice on the shore"
+  },
+  {
+   "t": 86800,
+   "final": "than the mountain pins"
+  },
+  {
+   "t": 91800,
+   "final": "Brighter than the harves moon"
+  },
+  {
+   "t": 96800,
+   "final": "Sing out acros oh the morning bay yeah"
+  },
+  {
+   "t": 101800,
+   "final": "Sing until the fog rolls"
+  },
+  {
+   "t": 106800,
+   "final": "We will gather the open door"
+  },
+  {
+   "t": 111800,
+   "final": "Lifting up our voices the shore"
+  }
+ ],
+ "truth": [
+  {
+   "from": 2000,
+   "to": 7000,
+   "song": "sample-lantern",
+   "section": "v1",
+   "line": 0
+  },
+  {
+   "from": 7000,
+   "to": 12000,
+   "song": "sample-lantern",
+   "section": "v1",
+   "line": 1
+  },
+  {
+   "from": 12000,
+   "to": 17000,
+   "song": "sample-lantern",
+   "section": "v1",
+   "line": 2
+  },
+  {
+   "from": 17000,
+   "to": 22000,
+   "song": "sample-lantern",
+   "section": "v1",
+   "line": 3
+  },
+  {
+   "from": 22000,
+   "to": 27000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 27000,
+   "to": 32000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 32000,
+   "to": 37000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 37000,
+   "to": 42000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 3
+  },
+  {
+   "from": 42000,
+   "to": 47000,
+   "song": "sample-lantern",
+   "section": "v2",
+   "line": 0
+  },
+  {
+   "from": 47000,
+   "to": 52000,
+   "song": "sample-lantern",
+   "section": "v2",
+   "line": 1
+  },
+  {
+   "from": 52000,
+   "to": 57000,
+   "song": "sample-lantern",
+   "section": "v2",
+   "line": 2
+  },
+  {
+   "from": 57000,
+   "to": 62000,
+   "song": "sample-lantern",
+   "section": "v2",
+   "line": 3
+  },
+  {
+   "from": 62000,
+   "to": 67000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 67000,
+   "to": 72000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 72000,
+   "to": 77000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 77000,
+   "to": 82000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 3
+  },
+  {
+   "from": 82000,
+   "to": 87000,
+   "song": "sample-lantern",
+   "section": "b",
+   "line": 0
+  },
+  {
+   "from": 87000,
+   "to": 92000,
+   "song": "sample-lantern",
+   "section": "b",
+   "line": 1
+  },
+  {
+   "from": 92000,
+   "to": 97000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 97000,
+   "to": 102000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 102000,
+   "to": 107000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 107000,
+   "to": 112000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 3
+  }
+ ]
+}

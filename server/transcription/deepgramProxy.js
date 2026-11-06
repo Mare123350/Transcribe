@@ -2,13 +2,13 @@ import { WebSocket } from 'ws';
 
 // Relays microphone audio from the browser to Deepgram, so the API key never reaches the browser.
 //   browser -> server: binary PCM16 at 16 kHz, or JSON { type: 'finalize' | 'stop' }
-//   server -> browser: JSON { type: 'transcript', text, isFinal } or { type: 'status', state, code?, message? }
+//   server -> browser: JSON { type: 'transcript', text, isFinal, words? } or { type: 'status', state, code?, message? }
 // Close code 4401 tells the browser that retrying won't help (key missing or refused).
 
 export const CLOSE_NO_RETRY = 4401;
 const MAX_QUEUED_FRAMES = 50; // about five seconds of audio while the upstream connection opens
 
-export function deepgramListenUrl({ baseUrl = 'wss://api.deepgram.com/v1/listen', model = 'nova-3', language = 'en' } = {}) {
+export function deepgramListenUrl({ baseUrl = 'wss://api.deepgram.com/v1/listen', model = 'nova-3', language = 'en', profile = 'speech' } = {}) {
   const params = new URLSearchParams({
     model,
     language,
@@ -17,7 +17,8 @@ export function deepgramListenUrl({ baseUrl = 'wss://api.deepgram.com/v1/listen'
     channels: '1',
     interim_results: 'true',
     punctuate: 'true',
-    endpointing: '300',
+    // Held notes and instrumental gaps shouldn't chop singing into tiny fragments.
+    endpointing: profile === 'music' ? '500' : '300',
     mip_opt_out: 'true', // don't let Deepgram keep this audio for model improvement
   });
   return `${baseUrl}?${params}`;
@@ -71,7 +72,9 @@ export function handleTranscriptionClient(client, { apiKey, url, keepAliveMs = 4
     if (message.type !== 'Results') return;
     const text = message.channel?.alternatives?.[0]?.transcript ?? '';
     const isFinal = Boolean(message.is_final);
-    if (text || isFinal) client.send(JSON.stringify({ type: 'transcript', text, isFinal }));
+    if (!text && !isFinal) return;
+    const words = isFinal ? message.channel?.alternatives?.[0]?.words?.map(({ word, confidence, start, end }) => ({ word, confidence, start, end })) : undefined;
+    client.send(JSON.stringify({ type: 'transcript', text, isFinal, words }));
   });
 
   upstream.on('unexpected-response', (_request, response) => {

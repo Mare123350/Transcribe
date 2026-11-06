@@ -1,0 +1,198 @@
+{
+ "name": "brief-aside-in-song",
+ "setlist": [
+  "sample-lantern",
+  "sample-orchard",
+  "sample-meadow",
+  "sample-tide"
+ ],
+ "events": [
+  {
+   "t": 6800,
+   "final": "A lantern drifts across the silver water"
+  },
+  {
+   "t": 11800,
+   "final": "Carried by the evening tide"
+  },
+  {
+   "t": 16800,
+   "final": "Every window on the harbor glowing"
+  },
+  {
+   "t": 21800,
+   "final": "Calling all the sailors home tonight"
+  },
+  {
+   "t": 26800,
+   "final": "Sing out across the morning bay"
+  },
+  {
+   "t": 31800,
+   "final": "Sing until the fog rolls away"
+  },
+  {
+   "t": 36800,
+   "final": "We will gather by the open door"
+  },
+  {
+   "t": 41800,
+   "final": "Lifting up our voices on the shore"
+  },
+  {
+   "t": 48400,
+   "final": "As the psalm reminds us He leads us beside the still waters so sing it again"
+  },
+  {
+   "t": 53200,
+   "final": "A copper bell rings out above the river"
+  },
+  {
+   "t": 58200,
+   "final": "Shaking dust from every beam"
+  },
+  {
+   "t": 63200,
+   "final": "Children running through the wheat and clover"
+  },
+  {
+   "t": 68200,
+   "final": "Following the current of the stream"
+  },
+  {
+   "t": 73200,
+   "final": "Sing out across the morning bay"
+  },
+  {
+   "t": 78200,
+   "final": "Sing until the fog rolls away"
+  },
+  {
+   "t": 83200,
+   "final": "We will gather by the open door"
+  },
+  {
+   "t": 88200,
+   "final": "Lifting up our voices on the shore"
+  }
+ ],
+ "truth": [
+  {
+   "from": 2000,
+   "to": 7000,
+   "song": "sample-lantern",
+   "section": "v1",
+   "line": 0
+  },
+  {
+   "from": 7000,
+   "to": 12000,
+   "song": "sample-lantern",
+   "section": "v1",
+   "line": 1
+  },
+  {
+   "from": 12000,
+   "to": 17000,
+   "song": "sample-lantern",
+   "section": "v1",
+   "line": 2
+  },
+  {
+   "from": 17000,
+   "to": 22000,
+   "song": "sample-lantern",
+   "section": "v1",
+   "line": 3
+  },
+  {
+   "from": 22000,
+   "to": 27000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 27000,
+   "to": 32000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 32000,
+   "to": 37000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 37000,
+   "to": 42000,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 3
+  },
+  {
+   "from": 42000,
+   "to": 48400,
+   "song": null
+  },
+  {
+   "from": 48400,
+   "to": 53400,
+   "song": "sample-lantern",
+   "section": "v2",
+   "line": 0
+  },
+  {
+   "from": 53400,
+   "to": 58400,
+   "song": "sample-lantern",
+   "section": "v2",
+   "line": 1
+  },
+  {
+   "from": 58400,
+   "to": 63400,
+   "song": "sample-lantern",
+   "section": "v2",
+   "line": 2
+  },
+  {
+   "from": 63400,
+   "to": 68400,
+   "song": "sample-lantern",
+   "section": "v2",
+   "line": 3
+  },
+  {
+   "from": 68400,
+   "to": 73400,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 0
+  },
+  {
+   "from": 73400,
+   "to": 78400,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 1
+  },
+  {
+   "from": 78400,
+   "to": 83400,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 2
+  },
+  {
+   "from": 83400,
+   "to": 88400,
+   "song": "sample-lantern",
+   "section": "c",
+   "line": 3
+  }
+ ]
+}
