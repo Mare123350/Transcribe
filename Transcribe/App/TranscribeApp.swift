@@ -1,0 +1,66 @@
+import SwiftData
+import SwiftUI
+
+@main
+struct TranscribeApp: App {
+    private let container: ModelContainer
+    @State private var model: AppModel
+
+    init() {
+        let container = Self.makeContainer()
+        self.container = container
+        _model = State(initialValue: AppModel(container: container))
+    }
+
+    var body: some Scene {
+        Window("Transcribe", id: WindowID.main) {
+            ContentView()
+                .environment(model)
+                .frame(minWidth: 900, minHeight: 560)
+        }
+        .modelContainer(container)
+        .commands { TranscribeCommands(model: model) }
+
+        Window("Presentation", id: WindowID.presentation) {
+            PresentationView()
+                .environment(model)
+        }
+        .modelContainer(container)
+        .defaultSize(width: 1280, height: 720)
+
+        Window("Song Library", id: WindowID.songLibrary) {
+            SongLibraryView()
+                .environment(model)
+                .frame(minWidth: 720, minHeight: 480)
+        }
+        .modelContainer(container)
+
+        Settings {
+            SettingsView()
+                .environment(model)
+        }
+        .modelContainer(container)
+    }
+
+    private static func makeContainer() -> ModelContainer {
+        let schema = Schema([Session.self, TranscriptItem.self, StoredSong.self])
+        #if DEBUG
+        if CommandLine.arguments.contains("-PipelineSelfTest") {
+            return try! ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        }
+        #endif
+        do {
+            return try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema))
+        } catch {
+            // The store couldn't be opened. Keep the app usable rather than crashing; nothing will persist.
+            NSLog("Transcribe: couldn't open the session store (\(error)). Using a temporary store.")
+            return try! ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        }
+    }
+}
+
+enum WindowID {
+    static let main = "main"
+    static let presentation = "presentation"
+    static let songLibrary = "song-library"
+}

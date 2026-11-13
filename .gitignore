@@ -3,3 +3,10 @@ node_modules/
 saved-transcripts/
 .DS_Store
 library/
+
+# Xcode / SwiftPM
+.build/
+xcuserdata/
+DerivedData/
+*.xcuserstate
+Packages/TranscribeKit/.swiftpm/
