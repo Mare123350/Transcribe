@@ -66,6 +66,15 @@ final class TranscriptItem {
     var alternativesData: Data?
     /// True once enough of the passage was heard to settle the version.
     var versionSettled: Bool = false
+    /// A version the speaker or operator asked for that isn't the one shown ("NIV requested,
+    /// showing KJV"). Empty when the shown version is the one asked for.
+    var requestedVersion: String = ""
+    /// Copyright line required by an online provider (ESV API, API.Bible), shown with the text.
+    var verseCopyright: String = ""
+
+    /// Segment: the words exactly as transcribed, before references were written out
+    /// ("John 316" -> "John 3:16"). Empty if nothing was changed.
+    var originalText: String = ""
 
     // Detections (songs and verses)
     var confidence: Double = 0

@@ -163,6 +163,12 @@ struct SegmentRow: View {
         }
         .contextMenu {
             Button(editing ? "Done Editing" : "Edit Text") { editing.toggle() }
+            if !item.originalText.isEmpty {
+                Button("Restore Original Wording") {
+                    item.text = item.originalText
+                    item.originalText = ""
+                }
+            }
             Button("Insert Header Above") { model.insertHeader(before: item, in: session) }
             Divider()
             Button("Delete", role: .destructive) { model.context.delete(item) }

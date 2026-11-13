@@ -41,7 +41,9 @@ enum ExportService {
             case .verse:
                 flush()
                 let confidence: Double? = item.verseSource == .manual || item.versionNamedBySpeaker || item.versionScores.isEmpty ? nil : item.confidence
-                blocks.append(.verse(time: item.timestamp, reference: item.reference, version: item.versionAbbreviation, confidence: confidence, text: item.verseText, spoken: item.spokenText))
+                let version = item.requestedVersion.isEmpty ? item.versionAbbreviation : "\(item.versionAbbreviation); \(item.requestedVersion) requested"
+                let text = item.verseCopyright.isEmpty ? item.verseText : "\(item.verseText)\n\(item.verseCopyright)"
+                blocks.append(.verse(time: item.timestamp, reference: item.reference, version: version, confidence: confidence, text: text, spoken: item.spokenText))
             }
         }
         flush()

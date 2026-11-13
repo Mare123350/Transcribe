@@ -28,6 +28,8 @@ public enum SpokenReferenceNormalizer {
         public let kind: Kind
         /// A sentence boundary (. ? !) came right before this token.
         public var breakBefore: Bool
+        /// Where the token came from in the original text (UTF-16), for rewriting it in place.
+        public var range = NSRange(location: NSNotFound, length: 0)
 
         var word: String? { if case .word(let w) = kind { w } else { nil } }
         var number: Int? { if case .number(let n, _) = kind { n } else { nil } }
@@ -37,6 +39,7 @@ public enum SpokenReferenceNormalizer {
     struct Raw {
         let text: String
         let breakBefore: Bool
+        var range = NSRange(location: NSNotFound, length: 0)
     }
 
     // MARK: Vocabulary
@@ -121,17 +124,17 @@ public enum SpokenReferenceNormalizer {
                     if character.isNumber {
                         current.append(character)
                     } else {
-                        if !current.isEmpty { result.append(Raw(text: current, breakBefore: first && breakBefore)); first = false }
+                        if !current.isEmpty { result.append(Raw(text: current, breakBefore: first && breakBefore, range: match.range)); first = false }
                         current = ""
-                        result.append(Raw(text: ":.".contains(character) ? "verse" : "to", breakBefore: false))
+                        result.append(Raw(text: ":.".contains(character) ? "verse" : "to", breakBefore: false, range: match.range))
                     }
                 }
-                if !current.isEmpty { result.append(Raw(text: current, breakBefore: first && breakBefore)) }
+                if !current.isEmpty { result.append(Raw(text: current, breakBefore: first && breakBefore, range: match.range)) }
             } else if text.contains(where: { "-–".contains($0) }) {
                 let parts = text.split(whereSeparator: { "-–".contains($0) }).map(String.init)
-                for (i, part) in parts.enumerated() { result.append(Raw(text: part, breakBefore: i == 0 && breakBefore)) }
+                for (i, part) in parts.enumerated() { result.append(Raw(text: part, breakBefore: i == 0 && breakBefore, range: match.range)) }
             } else {
-                result.append(Raw(text: text, breakBefore: breakBefore))
+                result.append(Raw(text: text, breakBefore: breakBefore, range: match.range))
             }
         }
         return result
@@ -166,7 +169,7 @@ public enum SpokenReferenceNormalizer {
         return liveAliases[target].map { ($0, 1) }
     }
 
-    static func matchBook(_ src: [Raw], _ i: Int, manual: Bool, allowPrefix: Bool) -> (end: Int, book: BookMatch)? {
+    static func matchBook(_ src: [Raw], _ i: Int, manual: Bool, allowPrefix: Bool) -> (end: Int, book: BookMatch, textStart: Int)? {
         var j = i
         var number: Int?
         if allowPrefix, let prefix = bookPrefixes[src[i].text] {
@@ -189,21 +192,23 @@ public enum SpokenReferenceNormalizer {
         guard let (entry, length) = found else { return nil }
         let heard = src[j..<(j + length)].map(\.text).joined(separator: " ")
         let end = j + length
+        // When rewriting the transcript, keep a cue like "the book of" and replace only the name.
+        let textStart = number == nil ? j : i
 
         switch entry {
         case .numbered(let base):
             if let number {
                 guard let id = base.ids[number] else { return nil }
-                return (end, BookMatch(key: "\(number) \(base.key)", ids: [id], numbered: true, cued: cued, heard: heard, fuzzy: fuzzy))
+                return (end: end, book: BookMatch(key: "\(number) \(base.key)", ids: [id], numbered: true, cued: cued, heard: heard, fuzzy: fuzzy), textStart: textStart)
             }
             if let defaultID = base.defaultID {
-                return (end, BookMatch(key: base.key, ids: [defaultID], cued: cued, heard: heard, fuzzy: fuzzy))
+                return (end: end, book: BookMatch(key: base.key, ids: [defaultID], cued: cued, heard: heard, fuzzy: fuzzy), textStart: textStart)
             }
-            return (end, BookMatch(key: base.key, ids: base.ids.keys.sorted().compactMap { base.ids[$0] }, bare: true, cued: cued, heard: heard, fuzzy: fuzzy))
+            return (end: end, book: BookMatch(key: base.key, ids: base.ids.keys.sorted().compactMap { base.ids[$0] }, bare: true, cued: cued, heard: heard, fuzzy: fuzzy), textStart: textStart)
         case .book(let key, let id, let misheard):
             // "second Romans" isn't a book; let the number fall through as a plain word.
             if number != nil { return nil }
-            return (end, BookMatch(key: key, ids: [id], cued: cued, heard: heard, fuzzy: fuzzy, misheard: misheard))
+            return (end: end, book: BookMatch(key: key, ids: [id], cued: cued, heard: heard, fuzzy: fuzzy, misheard: misheard), textStart: textStart)
         }
     }
 
@@ -288,6 +293,12 @@ public enum SpokenReferenceNormalizer {
         var out: [Token] = []
         var i = 0
 
+        func span(_ from: Int, _ to: Int) -> NSRange {
+            let ranges = src[from..<min(to, src.count)].map(\.range).filter { $0.location != NSNotFound }
+            guard let first = ranges.first, let last = ranges.last else { return NSRange(location: NSNotFound, length: 0) }
+            return NSRange(location: first.location, length: NSMaxRange(last) - first.location)
+        }
+
         func previousAllowsNumber() -> Bool {
             guard let previous = out.last else { return false }
             if previous.book != nil || previous.number != nil { return true }
@@ -301,12 +312,13 @@ public enum SpokenReferenceNormalizer {
             if let ordinal = parseOrdinal(src, i), i + ordinal.length < src.count {
                 let target = src[i + ordinal.length].text
                 if target == "chapter" || target == "verse" || target == "psalm" {
+                    let whole = span(i, i + ordinal.length + 1)
                     if target == "psalm" {
-                        out.append(Token(kind: .book(BookMatch(key: "psalm", ids: ["PSA"], cued: true, heard: "psalm")), breakBefore: raw.breakBefore))
+                        out.append(Token(kind: .book(BookMatch(key: "psalm", ids: ["PSA"], cued: true, heard: "psalm")), breakBefore: raw.breakBefore, range: whole))
                     } else {
-                        out.append(Token(kind: .word(target), breakBefore: raw.breakBefore))
+                        out.append(Token(kind: .word(target), breakBefore: raw.breakBefore, range: whole))
                     }
-                    out.append(Token(kind: .number(ordinal.value, compound: nil), breakBefore: false))
+                    out.append(Token(kind: .number(ordinal.value, compound: nil), breakBefore: false, range: whole))
                     i += ordinal.length + 1
                     continue
                 }
@@ -316,29 +328,29 @@ public enum SpokenReferenceNormalizer {
             let previous = out.last
             let allowPrefix = !(previous?.book != nil || ["chapter", "verse", "verses"].contains(previous?.word ?? ""))
             if let match = matchBook(src, i, manual: manual, allowPrefix: allowPrefix) {
-                out.append(Token(kind: .book(match.book), breakBefore: raw.breakBefore))
+                out.append(Token(kind: .book(match.book), breakBefore: raw.breakBefore, range: span(match.textStart, match.end)))
                 i = match.end
                 continue
             }
 
             if let number = parseNumber(src, i, manual: manual) {
-                out.append(Token(kind: .number(number.value, compound: number.compound), breakBefore: raw.breakBefore))
+                out.append(Token(kind: .number(number.value, compound: number.compound), breakBefore: raw.breakBefore, range: span(i, i + number.length)))
                 i += number.length
                 continue
             }
 
             if previousAllowsNumber(), let value = homophones[raw.text] {
-                out.append(Token(kind: .number(value, compound: nil), breakBefore: raw.breakBefore))
+                out.append(Token(kind: .number(value, compound: nil), breakBefore: raw.breakBefore, range: raw.range))
                 i += 1
                 continue
             }
 
             if let keyword = keywords[raw.text], raw.text != "vs" || manual || previousAllowsNumber() {
-                out.append(Token(kind: .word(keyword), breakBefore: raw.breakBefore))
+                out.append(Token(kind: .word(keyword), breakBefore: raw.breakBefore, range: raw.range))
             } else if previous?.number != nil, rangeWords.contains(raw.text) {
-                out.append(Token(kind: .word("to"), breakBefore: raw.breakBefore))
+                out.append(Token(kind: .word("to"), breakBefore: raw.breakBefore, range: raw.range))
             } else {
-                out.append(Token(kind: .word(raw.text), breakBefore: raw.breakBefore))
+                out.append(Token(kind: .word(raw.text), breakBefore: raw.breakBefore, range: raw.range))
             }
             i += 1
         }

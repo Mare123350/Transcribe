@@ -10,6 +10,19 @@ public struct DetectedReference: Sendable, Hashable {
     public let reasons: [String]
     /// The words that made up the reference, as normalized tokens.
     public let phrase: String
+    /// Where the reference was said in the original text (UTF-16), if known.
+    public var sourceRange: NSRange? = nil
+    /// How it was said, which decides how the transcript is rewritten.
+    public var form: Form = .absolute
+
+    public enum Form: Sendable, Hashable {
+        /// "John 3:16", "first Corinthians thirteen": replaced with the written reference.
+        case absolute
+        /// "verses 16 through 18" after John 3 was mentioned: replaced with the full reference.
+        case contextVerse
+        /// "the next verse": the words are kept and the reference added in brackets.
+        case step
+    }
 }
 
 /// Step 2: finds references in normalized tokens and checks they exist.
@@ -38,19 +51,152 @@ public enum ReferenceParser {
         var last: Int
     }
 
-    public static func parse(_ text: String, manual: Bool = false) -> [DetectedReference] {
+    /// Finds references in `text`. With `context` (the passage the speaker is in), relative forms
+    /// are understood too: "the next verse", "the previous verse", "verses 16 through 18".
+    public static func parse(_ text: String, manual: Bool = false, context: BibleReference? = nil) -> [DetectedReference] {
         let tokens = SpokenReferenceNormalizer.normalize(text, manual: manual)
         var results: [DetectedReference] = []
+        var context = context
         var i = 0
         while i < tokens.count {
             if let candidate = candidate(in: tokens, at: i) {
-                results += interpret(candidate, tokens: tokens, manual: manual)
+                let found = interpret(candidate, tokens: tokens, manual: manual)
+                results += found
+                if let last = found.last, last.confidence >= 0.75 { context = last.reference }
                 i = candidate.last + 1
+            } else if let context, let (reference, form, last) = relative(in: tokens, at: i, context: context) {
+                results.append(DetectedReference(
+                    reference: reference, alternatives: [], confidence: form == .step ? 0.85 : 0.8,
+                    reasons: ["Follows on from \(context)."], phrase: phrase(tokens, i, last),
+                    sourceRange: sourceRange(tokens, i, last), form: form
+                ))
+                i = last + 1
             } else {
                 i += 1
             }
         }
         return results
+    }
+
+    /// Rewrites spoken references in a transcript line in their written form:
+    ///   "John 316."                          -> "John 3:16."
+    ///   "first Corinthians thirteen verse 4" -> "1 Corinthians 13:4"
+    ///   "the next verse"                     -> "the next verse (John 3:17)"
+    /// Only references at least `minimumConfidence` sure are rewritten, so "James 2 said" stays.
+    public static func rewrite(_ text: String, references: [DetectedReference], minimumConfidence: Double = 0.75) -> String {
+        let ns = text as NSString
+        // Separate ranges said together ("verses 5 and 7") share one span.
+        var groups: [(range: NSRange, refs: [DetectedReference])] = []
+        for reference in references where reference.confidence >= minimumConfidence {
+            guard let range = reference.sourceRange, range.location != NSNotFound, NSMaxRange(range) <= ns.length else { continue }
+            if let index = groups.firstIndex(where: { $0.range == range }) { groups[index].refs.append(reference) }
+            else if !groups.contains(where: { NSIntersectionRange($0.range, range).length > 0 }) { groups.append((range, [reference])) }
+        }
+        var result = text
+        for group in groups.sorted(by: { $0.range.location > $1.range.location }) {
+            let written = written(group.refs)
+            var range = group.range
+            let original = ns.substring(with: range)
+            if group.refs[0].form == .step {
+                result = (result as NSString).replacingCharacters(in: range, with: "\(original) (\(written))")
+                continue
+            }
+            // "the third chapter of John" -> "John 3", not "the John 3".
+            let firstWord = original.split(separator: " ").first.map { $0.lowercased() } ?? ""
+            if leadingWords.contains(firstWord) || SpokenReferenceNormalizer.ordinalUnits[firstWord] != nil
+                || SpokenReferenceNormalizer.tens[firstWord] != nil || SpokenReferenceNormalizer.ordinalTens[firstWord] != nil
+                || SpokenReferenceNormalizer.ordinalTeens[firstWord] != nil,
+               range.location >= 4, ns.substring(with: NSRange(location: range.location - 4, length: 4)).lowercased() == "the " {
+                range = NSRange(location: range.location - 4, length: range.length + 4)
+            }
+            result = (result as NSString).replacingCharacters(in: range, with: written)
+        }
+        return result
+    }
+
+    private static let leadingWords: Set<String> = ["chapter", "verse", "verses"]
+
+    /// "Proverbs 3:5, 7" for separate verses of one chapter; otherwise each reference in turn.
+    static func written(_ refs: [DetectedReference]) -> String {
+        let references = refs.map(\.reference)
+        guard references.count > 1, let first = references.first,
+              references.allSatisfy({ $0.book == first.book && $0.chapter == first.chapter && $0.verseStart != nil }) else {
+            return references.map(\.description).joined(separator: "; ")
+        }
+        let rest = references.dropFirst().map { ref in
+            ref.verseEnd == ref.verseStart ? "\(ref.verseStart!)" : "\(ref.verseStart!)-\(ref.verseEnd!)"
+        }
+        return ([first.description] + rest).joined(separator: ", ")
+    }
+
+    static func sourceRange(_ tokens: [Token], _ first: Int, _ last: Int) -> NSRange? {
+        let ranges = tokens[first...last].map(\.range).filter { $0.location != NSNotFound }
+        guard let start = ranges.map(\.location).min(), let end = ranges.map({ NSMaxRange($0) }).max() else { return nil }
+        return NSRange(location: start, length: end - start)
+    }
+
+    static func phrase(_ tokens: [Token], _ first: Int, _ last: Int) -> String {
+        tokens[first...last].map { token -> String in
+            switch token.kind {
+            case .word(let w): w
+            case .number(let n, _): "\(n)"
+            case .book(let b): b.key
+            }
+        }.joined(separator: " ")
+    }
+
+    // MARK: Relative references
+
+    /// "next verse", "the following verse", "previous verse", "the verse before",
+    /// "verse 17", "verses 16 through 18" — read against the passage being discussed.
+    private static func relative(in tokens: [Token], at i: Int, context: BibleReference) -> (BibleReference, DetectedReference.Form, Int)? {
+        let w = word(tokens, i)
+        let next = word(tokens, i + 1)
+        if (w == "next" || w == "following") && next == "verse" {
+            return step(context, by: 1).map { ($0, .step, i + 1) }
+        }
+        if (w == "previous" || w == "preceding") && next == "verse" {
+            return step(context, by: -1).map { ($0, .step, i + 1) }
+        }
+        if w == "verse", next == "before" {
+            return step(context, by: -1).map { ($0, .step, i + 1) }
+        }
+        if w == "verse", next == "after", word(tokens, i + 2) == "that" {
+            return step(context, by: 1).map { ($0, .step, i + 2) }
+        }
+        // "chapter 5 verse 3" without a book: the same book.
+        if w == "chapter", let chapter = number(tokens, i + 1), let tail = verseTail(tokens, from: i + 2), tail.marked,
+           tail.ranges.count == 1, !["of", "in"].contains(word(tokens, tail.last + 1) ?? "") {
+            let range = tail.ranges[0]
+            let reference = BibleReference(book: context.book, chapter: chapter, verseStart: range.lowerBound, verseEnd: range.upperBound)
+            return reference.isValid ? (reference, .contextVerse, tail.last) : nil
+        }
+        // A bare "verse 17": not followed by "of John" (that is an absolute reference).
+        if w == "verse" || w == "verses", i == 0 || tokens[i - 1].book == nil && tokens[i - 1].number == nil,
+           let tail = verseTail(tokens, from: i), tail.ranges.count == 1, !tail.crossChapter,
+           !["of", "in"].contains(word(tokens, tail.last + 1) ?? "") {
+            let range = tail.ranges[0]
+            let reference = BibleReference(book: context.book, chapter: context.chapter, verseStart: range.lowerBound, verseEnd: range.upperBound)
+            guard reference.isValid else { return nil }
+            return (reference, .contextVerse, tail.last)
+        }
+        return nil
+    }
+
+    /// The verse after (or before) a passage, crossing into the next or previous chapter.
+    static func step(_ reference: BibleReference, by delta: Int) -> BibleReference? {
+        guard let start = reference.verseStart else { return nil }
+        let end = reference.verseEnd ?? start
+        if delta > 0 {
+            let candidate = BibleReference(book: reference.book, chapter: reference.chapter, verseStart: end + 1)
+            if candidate.isValid { return candidate }
+            let nextChapter = BibleReference(book: reference.book, chapter: reference.chapter + 1, verseStart: 1)
+            return nextChapter.isValid ? nextChapter : nil
+        }
+        if start > 1 { return BibleReference(book: reference.book, chapter: reference.chapter, verseStart: start - 1) }
+        guard reference.chapter > 1 else { return nil }
+        let count = Versification.verseCount(reference.book, chapter: reference.chapter - 1)
+        return count > 0 ? BibleReference(book: reference.book, chapter: reference.chapter - 1, verseStart: count) : nil
     }
 
     /// One reference typed by the operator: "1 cor 13:4-7", "first corinthians thirteen".
@@ -262,18 +408,13 @@ public enum ReferenceParser {
             }
         }
 
-        let phrase = tokens[c.first...c.last].map { token -> String in
-            switch token.kind {
-            case .word(let w): w
-            case .number(let n, _): "\(n)"
-            case .book(let b): b.key
-            }
-        }.joined(separator: " ")
+        let phrase = phrase(tokens, c.first, c.last)
+        let range = sourceRange(tokens, c.first, c.last)
 
         let others = options.dropFirst().compactMap(\.first)
         // Separate ranges ("verses four and six") become separate detections.
         return primary.enumerated().map { index, reference in
-            DetectedReference(reference: reference, alternatives: index == 0 ? Array(others) : [], confidence: confidence, reasons: reasons, phrase: phrase)
+            DetectedReference(reference: reference, alternatives: index == 0 ? Array(others) : [], confidence: confidence, reasons: reasons, phrase: phrase, sourceRange: range)
         }
     }
 }

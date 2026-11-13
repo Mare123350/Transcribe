@@ -33,8 +33,8 @@ public actor ScriptureDetector {
 
     // MARK: References
 
-    public nonisolated func references(in text: String) -> [DetectedReference] {
-        ReferenceParser.parse(text)
+    public nonisolated func references(in text: String, context: BibleReference? = nil) -> [DetectedReference] {
+        ReferenceParser.parse(text, context: context)
     }
 
     public nonisolated func namedVersion(in text: String) -> String? {
@@ -47,6 +47,20 @@ public actor ScriptureDetector {
 
     public func passage(_ reference: BibleReference, abbreviation: String) -> String? {
         translation(abbreviation: abbreviation)?.text(of: reference)
+    }
+
+    /// The passage in the requested version if it's installed; otherwise in the default, then the
+    /// fallback order. `choice.source == .online` means the caller should fetch it from a provider.
+    public func resolvedPassage(_ reference: BibleReference, requested: String?, defaultVersion: String, order: [String], online: [String] = []) -> (choice: TranslationChoice, text: String?) {
+        let choice = TranslationResolver.resolve(
+            requested: requested, installed: translations.map(\.info.abbreviation), online: online,
+            defaultVersion: defaultVersion, order: order,
+            hasPassage: { self.translation(abbreviation: $0)?.text(of: reference) != nil }
+        )
+        switch choice.source {
+        case .installed, .fallback: return (choice, passage(reference, abbreviation: choice.shown))
+        case .online, .missing: return (choice, nil)
+        }
     }
 
     /// Scores what was said against every installed translation of `reference`, best first.

@@ -23,35 +23,12 @@ public enum TranslationLibrary {
         return result
     }
 
-    /// Imports a translation the user is licensed to use: a `.sqlite` file in the documented schema,
-    /// or a `.json` file (converted to SQLite). Returns the installed file's URL.
+    /// Imports a translation the user is licensed to use, in any supported format, keeping the
+    /// abbreviation and name found in the file. Returns the installed file's URL.
     @discardableResult
     public static func importTranslation(from source: URL, into directory: URL, existingIDs: Set<String>) throws -> URL {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        switch source.pathExtension.lowercased() {
-        case "sqlite", "db", "sqlite3":
-            let probe = try BibleTranslation(url: source, isBundled: false)
-            guard !existingIDs.contains(probe.info.id) else { throw TranslationError.duplicate(probe.info.abbreviation) }
-            let destination = directory.appendingPathComponent("\(probe.info.id).sqlite")
-            try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.copyItem(at: source, to: destination)
-            return destination
-        case "json":
-            let data = try Data(contentsOf: source)
-            let document: JSONTranslation
-            do {
-                document = try JSONDecoder().decode(JSONTranslation.self, from: data)
-            } catch {
-                throw TranslationError.invalidJSON(String(describing: error))
-            }
-            let id = (document.id ?? document.abbreviation).lowercased()
-            guard !existingIDs.contains(id) else { throw TranslationError.duplicate(document.abbreviation) }
-            let destination = directory.appendingPathComponent("\(id).sqlite")
-            try writeSQLite(document, id: id, to: destination)
-            return destination
-        default:
-            throw TranslationError.invalidSchema("expected a .sqlite or .json file")
-        }
+        let parsed = try TranslationImporter.parse(source)
+        return try TranslationImporter.install(parsed, abbreviation: parsed.abbreviation, name: parsed.name, license: parsed.license, into: directory, existingIDs: existingIDs)
     }
 
     /// The JSON import format. `book` may be a USFM id ("JHN") or a name ("John", "1 Corinthians").
@@ -69,43 +46,49 @@ public enum TranslationLibrary {
         let verses: [Entry]
     }
 
-    static func writeSQLite(_ document: JSONTranslation, id: String, to url: URL) throws {
-        try? FileManager.default.removeItem(at: url)
+    static func writeSQLite(meta: [String: String], verses: [Verse], to url: URL) throws {
+        let temporary = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).partial")
+        try? FileManager.default.removeItem(at: temporary)
         var db: OpaquePointer?
-        guard sqlite3_open(url.path, &db) == SQLITE_OK, let db else { throw TranslationError.cannotOpen(url.lastPathComponent) }
-        defer { sqlite3_close(db) }
+        guard sqlite3_open(temporary.path, &db) == SQLITE_OK, let db else { throw TranslationError.cannotOpen(url.lastPathComponent) }
         let schema = """
             CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE TABLE verses(book TEXT NOT NULL, chapter INTEGER NOT NULL, verse INTEGER NOT NULL, text TEXT NOT NULL,
                                 PRIMARY KEY(book, chapter, verse)) WITHOUT ROWID;
             BEGIN;
             """
-        guard sqlite3_exec(db, schema, nil, nil, nil) == SQLITE_OK else { throw TranslationError.cannotOpen(String(cString: sqlite3_errmsg(db))) }
-
-        func insert(_ sql: String, _ values: [Any]) {
+        guard sqlite3_exec(db, schema, nil, nil, nil) == SQLITE_OK else {
+            let message = String(cString: sqlite3_errmsg(db))
+            sqlite3_close(db)
+            throw TranslationError.cannotOpen(message)
+        }
+        func run(_ sql: String, _ bind: (OpaquePointer) -> Void) {
             var statement: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return }
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return }
             defer { sqlite3_finalize(statement) }
-            for (index, value) in values.enumerated() {
-                if let int = value as? Int { sqlite3_bind_int(statement, Int32(index + 1), Int32(int)) }
-                else { sqlite3_bind_text(statement, Int32(index + 1), "\(value)", -1, SQLITE_TRANSIENT) }
-            }
+            bind(statement)
             sqlite3_step(statement)
         }
-
-        for (key, value) in [("id", id), ("abbreviation", document.abbreviation), ("name", document.name), ("license", document.license ?? "Imported by the user"), ("schema_version", "1")] {
-            insert("INSERT INTO meta VALUES (?, ?)", [key, value])
+        for (key, value) in meta.sorted(by: { $0.key < $1.key }) {
+            run("INSERT INTO meta VALUES (?, ?)") { s in
+                sqlite3_bind_text(s, 1, key, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(s, 2, value, -1, SQLITE_TRANSIENT)
+            }
         }
-        var unknownBooks = Set<String>()
-        for entry in document.verses {
-            let book = Books.book(entry.book.uppercased())?.id ?? Books.resolve(name: entry.book)
-            guard let book else { unknownBooks.insert(entry.book); continue }
-            insert("INSERT OR REPLACE INTO verses VALUES (?, ?, ?, ?)", [book, entry.chapter, entry.verse, entry.text])
+        var insert: OpaquePointer?
+        sqlite3_prepare_v2(db, "INSERT OR REPLACE INTO verses VALUES (?, ?, ?, ?)", -1, &insert, nil)
+        for verse in verses {
+            sqlite3_reset(insert)
+            sqlite3_bind_text(insert, 1, verse.book, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int(insert, 2, Int32(verse.chapter))
+            sqlite3_bind_int(insert, 3, Int32(verse.verse))
+            sqlite3_bind_text(insert, 4, verse.text, -1, SQLITE_TRANSIENT)
+            sqlite3_step(insert)
         }
+        sqlite3_finalize(insert)
         sqlite3_exec(db, "COMMIT", nil, nil, nil)
-        if !unknownBooks.isEmpty && unknownBooks.count == Set(document.verses.map(\.book)).count {
-            try? FileManager.default.removeItem(at: url)
-            throw TranslationError.invalidJSON("no book names were recognized (for example “\(unknownBooks.first!)”)")
-        }
+        sqlite3_close(db)
+        try? FileManager.default.removeItem(at: url)
+        try FileManager.default.moveItem(at: temporary, to: url)
     }
 }

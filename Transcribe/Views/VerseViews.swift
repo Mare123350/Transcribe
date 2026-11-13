@@ -7,7 +7,9 @@ struct VerseCalloutView: View {
     @Bindable var item: TranscriptItem
     let session: Session
     @Environment(AppModel.self) private var model
+    @Environment(\.openSettings) private var openSettings
     @AppStorage(SettingsKey.fontSize) private var fontSize = 16.0
+    @AppStorage(SettingsKey.settingsTab) private var settingsTab = SettingsTab.general
     @State private var showSpoken = false
 
     var body: some View {
@@ -17,20 +19,23 @@ struct VerseCalloutView: View {
                 header
                 if needsConfirmation { confirmationBar }
 
+                if !item.requestedVersion.isEmpty { requestedBar }
+
                 if item.verseText.isEmpty {
-                    Text(item.spokenText.isEmpty ? "Waiting for the passage…" : item.spokenText)
+                    Text("No installed translation has this passage.")
                         .font(.system(.body, design: .serif))
                         .foregroundStyle(.secondary)
                         .italic()
-                    if item.versionNamedBySpeaker {
-                        Text("\(item.versionAbbreviation) isn't installed, so the spoken words are shown. Import it in Settings › Translations if your church is licensed to use it.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 } else {
                     Text(item.verseText)
                         .font(.system(size: fontSize * 1.05, design: .serif))
                         .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !item.verseCopyright.isEmpty {
+                    Text(item.verseCopyright)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -54,6 +59,22 @@ struct VerseCalloutView: View {
             }
         }
         .contextMenu { menuItems }
+    }
+
+    /// "NIV requested, showing KJV" with a way to get NIV.
+    private var requestedBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle").foregroundStyle(.orange)
+            Text("\(item.requestedVersion) requested, showing \(item.versionAbbreviation)")
+                .font(.caption.weight(.medium))
+            Spacer()
+            Button("Get \(item.requestedVersion)…") {
+                settingsTab = SettingsTab.translations
+                openSettings()
+            }
+            .controlSize(.small)
+            .help("Import a licensed copy, or connect an online provider with your own key")
+        }
     }
 
     private var needsConfirmation: Bool {
@@ -87,7 +108,8 @@ struct VerseCalloutView: View {
 
     private var versionLabel: String {
         if item.versionAbbreviation.isEmpty { return "Identifying version…" }
-        if item.versionNamedBySpeaker { return "\(item.versionAbbreviation) (named by speaker)" }
+        if item.versionNamedBySpeaker && item.requestedVersion.isEmpty { return "\(item.versionAbbreviation) (named by speaker)" }
+        if !item.requestedVersion.isEmpty || !item.verseCopyright.isEmpty { return item.versionAbbreviation }
         if item.verseSource == .manual || item.status == .confirmed && item.versionScores.isEmpty { return item.versionAbbreviation }
         if !item.versionSettled && item.confidence == 0 { return "\(item.versionAbbreviation) (default)" }
         return "\(item.versionAbbreviation), \(Int((item.confidence * 100).rounded()))%"
@@ -95,14 +117,14 @@ struct VerseCalloutView: View {
 
     @ViewBuilder private var versionMenu: some View {
         let scores = Dictionary(item.versionScores.map { ($0.abbreviation, $0.score) }, uniquingKeysWith: max)
-        ForEach(model.scripture.translations) { translation in
+        ForEach(model.scripture.allVersionNames, id: \.abbreviation) { version in
             Button {
-                Task { await model.scripture.changeVersion(of: item, to: translation.abbreviation) }
+                Task { await model.scripture.changeVersion(of: item, to: version.abbreviation) }
             } label: {
-                if let score = scores[translation.abbreviation] {
-                    Text("\(translation.abbreviation) — \(translation.name) (\(Int(score * 100))%)")
+                if let score = scores[version.abbreviation] {
+                    Text("\(version.abbreviation) — \(version.name) (\(Int(score * 100))%)")
                 } else {
-                    Text("\(translation.abbreviation) — \(translation.name)")
+                    Text("\(version.abbreviation) — \(version.name)")
                 }
             }
         }
@@ -158,7 +180,7 @@ struct InsertVerseSheet: View {
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(insert)
                 Picker("Version", selection: $abbreviation) {
-                    ForEach(model.scripture.translations) { Text($0.abbreviation).tag($0.abbreviation) }
+                    ForEach(model.scripture.allVersionNames, id: \.abbreviation) { Text($0.abbreviation).tag($0.abbreviation) }
                 }
                 .labelsHidden()
                 .fixedSize()

@@ -15,6 +15,11 @@ import TranscribeCore
 @Observable
 final class ScriptureService {
     private(set) var translations: [TranslationInfo] = []
+    /// Versions available from online providers the user has a key for.
+    private(set) var onlineVersions: [OnlineVersion] = []
+    /// The last problem fetching from an online provider, shown in Settings.
+    private(set) var onlineError: String?
+    let online: OnlineBibleService
     private(set) var isQuoteIndexReady = false
     private(set) var loadError: String?
 
@@ -27,6 +32,9 @@ final class ScriptureService {
     private var recent: [(key: String, at: Date, itemID: UUID)] = []
     private var previousSegment: (text: String, time: TimeInterval)?
     private var recentWords: [String] = []
+    /// The passage being discussed, so "the next verse" and "verse 18" can be understood.
+    private var lastReference: (reference: BibleReference, time: TimeInterval)?
+    static let contextWindow: TimeInterval = 180
 
     private struct Listening {
         let itemID: UUID
@@ -46,6 +54,38 @@ final class ScriptureService {
 
     init(context: ModelContext) {
         self.context = context
+        let defaults = UserDefaults.standard
+        let deviceID = defaults.string(forKey: SettingsKey.providerDeviceID) ?? {
+            let id = UUID().uuidString
+            defaults.set(id, forKey: SettingsKey.providerDeviceID)
+            return id
+        }()
+        let cacheURL = URL.applicationSupportDirectory.appending(path: "Transcribe/OnlineVerseCache.sqlite")
+        let cache = (try? OnlineVerseCache(url: cacheURL)) ?? (try! OnlineVerseCache(url: nil))
+        self.online = OnlineBibleService(credentials: KeychainCredentialStore(), cache: cache, apiBibleVersions: Self.storedAPIBibleVersions, deviceID: deviceID)
+    }
+
+    static var storedAPIBibleVersions: [OnlineVersion] {
+        UserDefaults.standard.data(forKey: SettingsKey.apiBibleVersions).flatMap { try? JSONDecoder().decode([OnlineVersion].self, from: $0) } ?? []
+    }
+
+    /// Re-reads which online versions can be used (after a key or version choice changes).
+    func refreshOnline() async {
+        await online.setAPIBibleVersions(Self.storedAPIBibleVersions)
+        onlineVersions = await online.availableVersions()
+    }
+
+    /// Abbreviations tried after the default when a passage is missing, in the user's order.
+    var fallbackOrder: [String] {
+        (UserDefaults.standard.string(forKey: SettingsKey.translationOrder) ?? "")
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    /// Every version the operator can pick: installed first, then online.
+    var allVersionNames: [(abbreviation: String, name: String, isOnline: Bool)] {
+        translations.map { ($0.abbreviation, $0.name, false) }
+            + onlineVersions.filter { version in !translations.contains { $0.abbreviation.caseInsensitiveCompare(version.abbreviation) == .orderedSame } }
+                .map { ($0.abbreviation, "\($0.name) (online)", true) }
     }
 
     nonisolated static var importedDirectory: URL {
@@ -68,6 +108,7 @@ final class ScriptureService {
         await detector.replaceTranslations(loaded)
         translations = loaded.map(\.info)
         loadError = loaded.isEmpty ? "No Bible translations could be loaded." : nil
+        await refreshOnline()
         isQuoteIndexReady = false
         await detector.prepareQuoteIndex()
         isQuoteIndexReady = await detector.isQuoteIndexReady
@@ -83,6 +124,46 @@ final class ScriptureService {
         await load()
     }
 
+    /// Reads files chosen for import (one file, several files, or a folder) without installing.
+    func parseImport(_ urls: [URL]) async throws -> ParsedTranslation {
+        let accessing = urls.map { $0.startAccessingSecurityScopedResource() }
+        defer { for (url, ok) in zip(urls, accessing) where ok { url.stopAccessingSecurityScopedResource() } }
+        return try await Task.detached { try TranslationImporter.parse(urls) }.value
+    }
+
+    func install(_ parsed: ParsedTranslation, abbreviation: String, name: String, license: String) async throws {
+        let existing = Set(translations.map(\.id))
+        _ = try await Task.detached {
+            try TranslationImporter.install(parsed, abbreviation: abbreviation, name: name, license: license, into: Self.importedDirectory, existingIDs: existing)
+        }.value
+        await load()
+    }
+
+    // MARK: Online providers
+
+    func hasKey(_ provider: OnlineProviderID) -> Bool { KeychainCredentialStore().key(for: provider) != nil }
+
+    /// Checks the key with the provider, then keeps it in the Keychain. For API.Bible, returns
+    /// the English versions the key can use.
+    func saveKey(_ key: String, for provider: OnlineProviderID) async throws -> [OnlineVersion] {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let versions = try await online.verify(provider, key: trimmed)
+        try KeychainCredentialStore().setKey(trimmed, for: provider)
+        await refreshOnline()
+        return versions
+    }
+
+    func removeKey(_ provider: OnlineProviderID) async {
+        try? KeychainCredentialStore().setKey(nil, for: provider)
+        if provider == .apiBible { setAPIBibleVersions([]) }
+        await refreshOnline()
+    }
+
+    func setAPIBibleVersions(_ versions: [OnlineVersion]) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(versions), forKey: SettingsKey.apiBibleVersions)
+        Task { await refreshOnline() }
+    }
+
     func removeTranslation(_ info: TranslationInfo) async {
         guard !info.isBundled else { return }
         try? FileManager.default.removeItem(at: Self.importedDirectory.appending(path: "\(info.id).sqlite"))
@@ -90,7 +171,42 @@ final class ScriptureService {
     }
 
     func text(of reference: BibleReference, abbreviation: String) async -> String? {
-        await detector.passage(reference, abbreviation: abbreviation)
+        if let text = await detector.passage(reference, abbreviation: abbreviation) { return text }
+        guard onlineVersions.contains(where: { $0.abbreviation.caseInsensitiveCompare(abbreviation) == .orderedSame }) else { return nil }
+        return try? await online.passage(reference, abbreviation: abbreviation).text
+    }
+
+    /// Fills a callout's text: the requested version if it's installed or online, otherwise the
+    /// default (then the fallback order), labelled "NIV requested, showing KJV".
+    func show(_ item: TranscriptItem, reference: BibleReference, requested: String?) async {
+        let onlineNames = onlineVersions.map(\.abbreviation)
+        let resolved = await detector.resolvedPassage(reference, requested: requested, defaultVersion: defaultAbbreviation, order: fallbackOrder, online: onlineNames)
+        guard resolved.choice.source == .online else {
+            apply(resolved, to: item)
+            return
+        }
+        // Show an installed version straight away, then swap in the online text when it arrives.
+        if item.verseText.isEmpty {
+            apply(await detector.resolvedPassage(reference, requested: requested, defaultVersion: defaultAbbreviation, order: fallbackOrder), to: item)
+        }
+        do {
+            let passage = try await online.passage(reference, abbreviation: resolved.choice.shown)
+            item.versionAbbreviation = passage.version.abbreviation
+            item.requestedVersion = ""
+            item.verseText = passage.text
+            item.verseCopyright = passage.copyright
+            onlineError = nil
+        } catch {
+            onlineError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            apply(await detector.resolvedPassage(reference, requested: requested, defaultVersion: defaultAbbreviation, order: fallbackOrder), to: item)
+        }
+    }
+
+    private func apply(_ resolved: (choice: TranslationChoice, text: String?), to item: TranscriptItem) {
+        item.versionAbbreviation = resolved.choice.shown
+        item.requestedVersion = resolved.choice.requested ?? ""
+        item.verseText = resolved.text ?? ""
+        item.verseCopyright = ""
     }
 
     // MARK: Live detection
@@ -100,6 +216,7 @@ final class ScriptureService {
         recent.removeAll()
         previousSegment = nil
         recentWords.removeAll()
+        lastReference = nil
     }
 
     /// Handles one finalized segment. Sung segments (inside a song) are ignored.
@@ -110,17 +227,30 @@ final class ScriptureService {
         previousSegment = (text, segment.endTimestamp)
         recent.removeAll { Date.now.timeIntervalSince($0.at) > 180 }
 
-        await feedListeners(segment)
+        // "The next verse", "verse 18": read against the passage being discussed.
+        if let last = lastReference, time - last.time > Self.contextWindow { lastReference = nil }
+        let contextReference = lastReference?.reference
 
         // A reference can be split across two segments ("John chapter 3" … "verse 16").
-        var detections = detector.references(in: text)
+        var detections = detector.references(in: text, context: contextReference)
+        if UserDefaults.standard.object(forKey: SettingsKey.rewriteReferences) as? Bool ?? true {
+            let rewritten = ReferenceParser.rewrite(text, references: detections)
+            if rewritten != text {
+                if segment.originalText.isEmpty { segment.originalText = text }
+                segment.text = rewritten
+            }
+        }
         if let previous, time - previous.time < 8 {
-            let joined = detector.references(in: previous.text + " " + text)
+            let joined = detector.references(in: previous.text + " " + text, context: contextReference)
             let alone = Set(detector.references(in: previous.text).map(\.reference.key))
-            for detection in joined where !alone.contains(detection.reference.key) && !detections.contains(where: { $0.reference == detection.reference }) {
+            // Only references said across the break; relative ones were already read above.
+            for detection in joined where detection.form == .absolute && !alone.contains(detection.reference.key) && !detections.contains(where: { $0.reference == detection.reference }) {
                 detections.append(detection)
             }
         }
+
+        // A version named alongside a new reference belongs to that reference, not to earlier ones.
+        await feedListeners(segment, namedVersionApplies: detections.isEmpty)
 
         let named = detector.namedVersion(in: text)
         for detection in detections where detection.confidence >= 0.5 {
@@ -142,8 +272,15 @@ final class ScriptureService {
            let item = item(chapterOnly.itemID), segment.timestamp - item.timestamp < 20 {
             remove(item)
         }
-        guard !recent.contains(where: { $0.key == reference.key }) else { return }
+        // The same passage again is the reading continuing, unless a different version is named.
+        let repeated = recent.filter { $0.key == reference.key }.compactMap { item($0.itemID) }
+        guard repeated.allSatisfy({ previous in
+            guard let namedVersion else { return false }
+            return previous.versionAbbreviation.caseInsensitiveCompare(namedVersion) != .orderedSame
+                && previous.requestedVersion.caseInsensitiveCompare(namedVersion) != .orderedSame
+        }) else { return }
 
+        if detection.confidence >= 0.75 { lastReference = (reference, segment.timestamp) }
         let item = TranscriptItem(kind: .verse, sortIndex: session.sortIndex(after: segment), timestamp: segment.timestamp)
         item.verseSource = .reference
         item.reference = reference.description
@@ -155,9 +292,8 @@ final class ScriptureService {
         item.session = session
         recent.append((reference.key, .now, item.id))
 
-        let abbreviation = defaultAbbreviation
-        item.versionAbbreviation = abbreviation
-        item.verseText = await detector.passage(reference, abbreviation: abbreviation) ?? ""
+        await show(item, reference: reference, requested: namedVersion)
+        if namedVersion != nil { item.versionNamedBySpeaker = true }
         let verseWords = TextNormalizer.tokens(item.verseText).count
 
         // Some speakers quote the verse in the same breath as the reference.
@@ -166,9 +302,9 @@ final class ScriptureService {
         await rescore(item.id)
     }
 
-    private func feedListeners(_ segment: TranscriptItem) async {
+    private func feedListeners(_ segment: TranscriptItem, namedVersionApplies: Bool) async {
         let text = segment.text
-        let named = detector.namedVersion(in: text)
+        let named = namedVersionApplies ? detector.namedVersion(in: text) : nil
         for id in Array(listening.keys) {
             guard var state = listening[id] else { continue }
             if segment.timestamp - state.startedAt > Self.listenWindow {
@@ -201,16 +337,12 @@ final class ScriptureService {
 
         if let named = state.namedVersion {
             item.versionNamedBySpeaker = true
-            item.versionAbbreviation = named
-            if let text = await detector.passage(state.reference, abbreviation: named) {
-                item.verseText = text
-                item.confidence = scores.first { $0.abbreviation == named }?.score ?? 1
-            } else {
-                // Named but not installed (e.g. NIV): show the reference and the spoken words.
-                item.verseText = ""
-                item.confidence = 1
-            }
-        } else if let best = scores.first, best.matchedWords >= 3 {
+            let alreadyShown = item.versionAbbreviation.caseInsensitiveCompare(named) == .orderedSame
+                || item.requestedVersion.caseInsensitiveCompare(named) == .orderedSame
+            // Named but not installed (e.g. NIV): the default is shown, labelled "NIV requested".
+            if !alreadyShown || item.verseText.isEmpty { await show(item, reference: state.reference, requested: named) }
+            item.confidence = scores.first { $0.abbreviation == item.versionAbbreviation }?.score ?? 1
+        } else if let best = scores.first, best.matchedWords >= 3, item.verseCopyright.isEmpty {
             if best.abbreviation != item.versionAbbreviation {
                 item.versionAbbreviation = best.abbreviation
                 item.verseText = await detector.passage(state.reference, abbreviation: best.abbreviation) ?? item.verseText
@@ -254,6 +386,7 @@ final class ScriptureService {
             item.versionAbbreviation = match.best.abbreviation
             item.verseText = await detector.passage(match.reference, abbreviation: match.best.abbreviation) ?? ""
             item.confidence = match.best.score
+            lastReference = (match.reference, segment.timestamp)
             item.versionScores = match.scores.map { VersionScoreValue(abbreviation: $0.abbreviation, score: $0.score) }
             // Show what was actually said, with its original wording and punctuation.
             let ownWords = VersionScorer.align(spoken: TextNormalizer.tokens(segment.text), verse: TextNormalizer.tokens(item.verseText)).matched
@@ -274,8 +407,7 @@ final class ScriptureService {
         item.verseSource = .manual
         item.reference = reference.description
         item.referenceKey = reference.key
-        item.versionAbbreviation = abbreviation
-        item.verseText = await detector.passage(reference, abbreviation: abbreviation) ?? ""
+        await show(item, reference: reference, requested: abbreviation)
         item.confidence = 1
         item.status = .confirmed
         item.versionSettled = true
@@ -296,8 +428,7 @@ final class ScriptureService {
     func changeVersion(of item: TranscriptItem, to abbreviation: String) async {
         guard let reference = item.bibleReference else { return }
         listening[item.id] = nil
-        item.versionAbbreviation = abbreviation
-        item.verseText = await detector.passage(reference, abbreviation: abbreviation) ?? ""
+        await show(item, reference: reference, requested: abbreviation)
         item.confidence = item.versionScores.first { $0.abbreviation == abbreviation }?.score ?? item.confidence
         item.versionNamedBySpeaker = false
         item.versionSettled = true
@@ -311,7 +442,7 @@ final class ScriptureService {
         item.alternatives = []
         item.referenceConfidence = 1
         item.referenceNote = ""
-        item.verseText = await detector.passage(reference, abbreviation: item.versionAbbreviation) ?? ""
+        await show(item, reference: reference, requested: item.requestedVersion.isEmpty ? item.versionAbbreviation : item.requestedVersion)
         item.status = .confirmed
     }
 

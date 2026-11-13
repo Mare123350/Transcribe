@@ -11,6 +11,14 @@ enum SettingsKey {
     static let detectQuotes = "detectQuotedVerses"
     static let replaceSungText = "replaceSungTextWithLyrics"
     static let presentationFontSize = "presentationFontSize"
+    /// Comma-separated abbreviations tried after the default when a passage is missing.
+    static let translationOrder = "translationFallbackOrder"
+    /// JSON list of API.Bible versions the user chose.
+    static let apiBibleVersions = "apiBibleVersions"
+    /// Anonymous id for API.Bible usage reporting.
+    static let providerDeviceID = "bibleProviderDeviceID"
+    static let settingsTab = "settingsTab"
+    static let rewriteReferences = "rewriteReferencesInTranscript"
 }
 
 /// A permission the app needs but doesn't have, with guidance and a shortcut to System Settings.

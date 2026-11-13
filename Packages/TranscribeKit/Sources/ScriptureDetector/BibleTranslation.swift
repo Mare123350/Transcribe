@@ -23,9 +23,17 @@ public enum TranslationError: LocalizedError, Sendable {
     case invalidSchema(String)
     case invalidJSON(String)
     case duplicate(String)
+    case unrecognizedFormat(String)
+    case noVerses(String)
+    case malformed(format: String, location: String, detail: String)
+    case unknownBooks([String])
 
     public var errorDescription: String? {
         switch self {
+        case .unrecognizedFormat(let file): "“\(file)” isn't a Bible format Transcribe can read. Use OSIS, USFM, USX, Zefania XML, or the JSON or SQLite format in docs/TRANSLATION_FORMAT.md."
+        case .noVerses(let detail): "Nothing to import: \(detail)."
+        case .malformed(let format, let location, let detail): "This \(format) file has a problem (\(location)): \(detail)."
+        case .unknownBooks(let names): "None of the book names were recognized (for example “\(names.prefix(3).joined(separator: "”, “"))”). Use USFM codes like JHN or names like John."
         case .cannotOpen(let detail): "Couldn't open the translation: \(detail)"
         case .invalidSchema(let detail): "This file isn't a Transcribe translation database: \(detail). See docs/TRANSLATION_FORMAT.md."
         case .invalidJSON(let detail): "This JSON isn't in the Transcribe translation format: \(detail). See docs/TRANSLATION_FORMAT.md."

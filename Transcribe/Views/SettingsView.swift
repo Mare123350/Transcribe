@@ -6,14 +6,17 @@ import Speech
 import SwiftUI
 
 struct SettingsView: View {
+    @AppStorage(SettingsKey.settingsTab) private var tab = SettingsTab.general
+
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gearshape") { GeneralSettings() }
-            Tab("Scripture", systemImage: "book") { ScriptureSettings() }
-            Tab("Songs", systemImage: "music.note") { SongSettings() }
-            Tab("Headers", systemImage: "list.bullet.indent") { HeaderSettings() }
+        TabView(selection: $tab) {
+            Tab("General", systemImage: "gearshape", value: SettingsTab.general) { GeneralSettings() }
+            Tab("Scripture", systemImage: "book", value: SettingsTab.scripture) { ScriptureSettings() }
+            Tab("Translations", systemImage: "books.vertical", value: SettingsTab.translations) { TranslationsSettings().frame(minHeight: 520) }
+            Tab("Songs", systemImage: "music.note", value: SettingsTab.songs) { SongSettings() }
+            Tab("Headers", systemImage: "list.bullet.indent", value: SettingsTab.headers) { HeaderSettings() }
         }
-        .frame(width: 560)
+        .frame(width: 600)
         .scenePadding()
     }
 }
@@ -63,62 +66,28 @@ private struct GeneralSettings: View {
 
 private struct ScriptureSettings: View {
     @Environment(AppModel.self) private var model
-    @AppStorage(SettingsKey.defaultTranslation) private var defaultTranslation = "KJV"
     @AppStorage(SettingsKey.detectQuotes) private var detectQuotes = true
-    @State private var importing = false
-    @State private var importError: String?
+    @AppStorage(SettingsKey.rewriteReferences) private var rewriteReferences = true
+    @AppStorage(SettingsKey.settingsTab) private var tab = SettingsTab.general
 
     var body: some View {
         Form {
             Section {
-                Picker("Default version", selection: $defaultTranslation) {
-                    ForEach(model.scripture.translations) { Text("\($0.abbreviation) — \($0.name)").tag($0.abbreviation) }
-                }
-                Text("Shown first when a reference is heard. Transcribe then listens to the reading and switches to the version that matches best, unless the speaker names one.")
-                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Recognize verses quoted without a reference", isOn: $detectQuotes)
                 if detectQuotes && !model.scripture.isQuoteIndexReady {
                     Label("Preparing the verse index…", systemImage: "hourglass").font(.caption).foregroundStyle(.secondary)
                 }
+                Toggle("Write references out in the transcript", isOn: $rewriteReferences)
+                Text("“John 316” becomes “John 3:16”, “first Corinthians thirteen verse four” becomes “1 Corinthians 13:4”, and “the next verse” gets its reference. The original wording is kept.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                ForEach(model.scripture.translations) { translation in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("\(translation.abbreviation) — \(translation.name)")
-                            Text(translation.isBundled ? "Bundled · \(translation.license)" : "Imported · \(translation.license)")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if !translation.isBundled {
-                            Button("Remove", role: .destructive) { Task { await model.scripture.removeTranslation(translation) } }
-                        }
-                    }
-                }
-            } header: {
-                Text("Installed Translations")
-            } footer: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("KJV, WEB, BSB, ASV and YLT are public domain and included. Other versions such as NIV, ESV, NKJV and NLT are copyrighted: import them only if your church is licensed to use them, as a .sqlite or .json file in the format described in docs/TRANSLATION_FORMAT.md.")
-                    Button("Import Translation…") { importing = true }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("When a reference is heard, Transcribe shows it in the default translation, then listens to the reading and switches to the version that matches best, unless the speaker names one.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button("Translations…") { tab = SettingsTab.translations }
             }
         }
         .formStyle(.grouped)
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.json, UTType(filenameExtension: "sqlite") ?? .database, .database]) { result in
-            guard case .success(let url) = result else { return }
-            Task {
-                do { try await model.scripture.importTranslation(from: url) }
-                catch { importError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription }
-            }
-        }
-        .alert("Couldn't Import", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(importError ?? "")
-        }
     }
 }
 

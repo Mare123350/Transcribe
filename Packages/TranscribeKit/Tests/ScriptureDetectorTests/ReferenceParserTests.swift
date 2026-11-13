@@ -66,6 +66,77 @@ struct ReferenceParserTests {
         #expect(result.confidence >= 0.75)
     }
 
+    @Test("More spoken forms", arguments: [
+        ("Turn to Matthew five, verses three to twelve", "Matthew 5:3-12"),
+        ("Genesis one one", "Genesis 1:1"),
+        ("Second Kings chapter two verse eleven", "2 Kings 2:11"),
+        ("1st Peter 5:7", "1 Peter 5:7"),
+        ("Ephesians 2 8 through 10", "Ephesians 2:8-10"),
+        ("Isaiah 53", "Isaiah 53"),
+        ("Psalm 23 verse 1", "Psalm 23:1"),
+        ("third John chapter one verse four", "3 John 4"),
+        ("Romans chapter twelve verses one and two", "Romans 12:1-2"),
+        ("John 3:16-18", "John 3:16-18"),
+        ("Hebrews 11, beginning at verse 1", "Hebrews 11:1"),
+        ("first Thessalonians five seventeen", "1 Thessalonians 5:17"),
+        ("Lamentations three twenty two to twenty three", "Lamentations 3:22-23"),
+        ("Micah 6:8", "Micah 6:8"),
+    ])
+    func moreSpoken(text: String, expected: String) {
+        #expect(refs(text) == [expected])
+    }
+
+    @Test("Relative references need the passage being discussed", arguments: [
+        ("Now look at the next verse.", "John 3:17"),
+        ("and the following verse says", "John 3:17"),
+        ("go back to the previous verse", "John 3:15"),
+        ("read verses 16 through 18", "John 3:16-18"),
+        ("Look at verse twenty", "John 3:20"),
+        ("chapter four verse one", "John 4:1"),
+    ])
+    func relative(text: String, expected: String) throws {
+        let context = BibleReference(book: "JHN", chapter: 3, verseStart: 16)
+        let result = try #require(ReferenceParser.parse(text, context: context).first)
+        #expect(result.reference.description == expected)
+        #expect(ReferenceParser.parse(text).isEmpty)
+    }
+
+    @Test("The next verse crosses into the next chapter")
+    func nextVerseCrossesChapter() {
+        let context = BibleReference(book: "JHN", chapter: 3, verseStart: 36)
+        #expect(ReferenceParser.parse("the next verse", context: context).first?.reference.description == "John 4:1")
+        let start = BibleReference(book: "JHN", chapter: 4, verseStart: 1)
+        #expect(ReferenceParser.parse("the previous verse", context: start).first?.reference.description == "John 3:36")
+    }
+
+    @Test("An earlier reference in the same line becomes the context")
+    func contextFromSameLine() {
+        #expect(refs("Romans 8:28, and then the next verse") == ["Romans 8:28", "Romans 8:29"])
+    }
+
+    @Test("Transcript lines are rewritten with written references", arguments: [
+        ("John 316 NIV version.", "John 3:16 NIV version."),
+        ("Please turn with me to John chapter three, verse sixteen.", "Please turn with me to John 3:16."),
+        ("First Corinthians thirteen verses four through seven", "1 Corinthians 13:4-7"),
+        ("Open to the twenty third psalm.", "Open to Psalm 23."),
+        ("the third chapter of John verse sixteen says", "John 3:16 says"),
+        ("Proverbs 3 verses 5 and 7", "Proverbs 3:5, 7"),
+        ("Read the book of Romans chapter eight", "Read the book of Romans 8"),
+        ("and James 2 said to me", "and James 2 said to me"),
+        ("God so loved the world", "God so loved the world"),
+    ])
+    func rewrite(text: String, expected: String) {
+        #expect(ReferenceParser.rewrite(text, references: ReferenceParser.parse(text)) == expected)
+    }
+
+    @Test("Relative references are rewritten against the context")
+    func rewriteRelative() {
+        let context = BibleReference(book: "JHN", chapter: 3, verseStart: 16)
+        let text = "Look at the next verse, and then verses 18 through 20."
+        let found = ReferenceParser.parse(text, context: context)
+        #expect(ReferenceParser.rewrite(text, references: found) == "Look at the next verse (John 3:17), and then John 3:18-20.")
+    }
+
     @Test("Separate verses become separate references")
     func separateVerses() {
         #expect(refs("Romans 12 verses 1 and 2") == ["Romans 12:1-2"])
