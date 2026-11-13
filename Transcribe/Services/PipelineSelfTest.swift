@@ -37,6 +37,8 @@ enum PipelineSelfTest {
     ]
 
     static func run(_ model: AppModel) async {
+        let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Self-test")
+        defer { ProcessInfo.processInfo.endActivity(activity) }
         // Wait for the translations and verse index.
         while !model.scripture.isQuoteIndexReady { try? await Task.sleep(for: .milliseconds(200)) }
         let session = model.newSession()

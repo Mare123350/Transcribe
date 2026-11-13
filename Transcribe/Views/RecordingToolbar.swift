@@ -14,7 +14,7 @@ struct RecordingToolbar: ToolbarContent {
             .disabled(!model.recorder.isActive)
             .help("Stop (⌘.)")
 
-            LevelMeter(level: model.recorder.level, active: model.recorder.state == .recording)
+            LevelMeter(recorder: model.recorder)
                 .frame(width: 70, height: 8)
                 .help("Input level")
 
@@ -65,21 +65,72 @@ private struct RecordButton: View {
     }
 }
 
-struct LevelMeter: View {
-    let level: Float
-    let active: Bool
+/// The input level, drawn by a layer that reads the recorder 15 times a second. It deliberately
+/// bypasses SwiftUI: a level that changes constantly would otherwise re-lay-out the toolbar.
+struct LevelMeter: NSViewRepresentable {
+    let recorder: RecordingController
 
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.quaternary)
-                Capsule()
-                    .fill(level > 0.85 ? Color.red : Color.green)
-                    .frame(width: proxy.size.width * CGFloat(active ? level : 0))
-                    .animation(.linear(duration: 0.08), value: level)
-            }
+    func makeNSView(context: Context) -> LevelMeterView {
+        LevelMeterView { [weak recorder] in
+            guard let recorder else { return (0, false) }
+            return (recorder.level, recorder.state == .recording)
         }
     }
+
+    func updateNSView(_ view: LevelMeterView, context: Context) {}
+}
+
+final class LevelMeterView: NSView {
+    private let read: @MainActor () -> (level: Float, active: Bool)
+    private let track = CALayer()
+    private let fill = CALayer()
+    private var timer: Timer?
+
+    init(read: @escaping @MainActor () -> (level: Float, active: Bool)) {
+        self.read = read
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.addSublayer(track)
+        layer?.addSublayer(fill)
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        timer?.invalidate()
+        guard window != nil else { return }
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        refresh()
+    }
+
+    override func updateLayer() {
+        track.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    private func refresh() {
+        let (level, active) = read()
+        let value = CGFloat(active ? max(0, min(1, level)) : 0)
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(1.0 / 15)
+        track.frame = bounds
+        track.cornerRadius = bounds.height / 2
+        track.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+        fill.frame = CGRect(x: 0, y: 0, width: bounds.width * value, height: bounds.height)
+        fill.cornerRadius = bounds.height / 2
+        fill.backgroundColor = (value > 0.85 ? NSColor.systemRed : NSColor.systemGreen).cgColor
+        CATransaction.commit()
+    }
+
+    deinit { MainActor.assumeIsolated { timer?.invalidate() } }
 }
 
 private struct InputPicker: View {

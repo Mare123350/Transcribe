@@ -110,7 +110,7 @@ final class ScriptureService {
         loadError = loaded.isEmpty ? "No Bible translations could be loaded." : nil
         await refreshOnline()
         isQuoteIndexReady = false
-        await detector.prepareQuoteIndex()
+        await detector.prepareQuoteIndex(cacheDirectory: URL.cachesDirectory.appending(path: "Transcribe", directoryHint: .isDirectory))
         isQuoteIndexReady = await detector.isQuoteIndexReady
     }
 
@@ -318,6 +318,7 @@ final class ScriptureService {
                 let alignment = VersionScorer.align(spoken: TextNormalizer.tokens(text), verse: TextNormalizer.tokens(callout.verseText))
                 if alignment.matched >= 5 && alignment.precision >= 0.6 {
                     segment.parentItemID = id
+                    TranscriptLayout.invalidate(segment.session)
                     state.reading.append(text)
                     if state.reading.count == 1, let session = segment.session { onPassageRead?(callout, session) }
                 }
@@ -421,6 +422,7 @@ final class ScriptureService {
         for child in item.session?.items ?? [] where child.parentItemID == item.id {
             child.parentItemID = nil
         }
+        TranscriptLayout.invalidate(item.session)
         recent.removeAll { $0.itemID == item.id }
         context.delete(item)
     }
@@ -448,8 +450,14 @@ final class ScriptureService {
 
     // MARK: Helpers
 
+    /// Items this service has looked up, so the main thread doesn't run a fetch per lookup.
+    private var known: [UUID: TranscriptItem] = [:]
+
     private func item(_ id: UUID) -> TranscriptItem? {
-        try? context.fetch(FetchDescriptor<TranscriptItem>(predicate: #Predicate { $0.id == id })).first
+        if let cached = known[id], !cached.isDeleted, cached.modelContext != nil { return cached }
+        let found = try? context.fetch(FetchDescriptor<TranscriptItem>(predicate: #Predicate { $0.id == id })).first
+        known[id] = found
+        return found
     }
 
     private static func trim(_ text: String, maxWords: Int) -> String {

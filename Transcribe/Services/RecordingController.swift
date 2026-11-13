@@ -20,6 +20,10 @@ final class RecordingController {
     private(set) var statusMessage = ""
     private(set) var engine: TranscriberEngine?
     private(set) var lastAutosave: Date?
+    /// How long the last start took, from pressing Record to listening.
+    private(set) var lastStartDuration: Duration?
+    /// Where the start time went, for diagnosing slow starts.
+    private(set) var lastStartPhases: [(String, Duration)] = []
     var problem: PermissionProblem?
     var errorMessage: String?
 
@@ -35,6 +39,9 @@ final class RecordingController {
     private var forwardTask: Task<Void, Never>?
     private var autosaveTask: Task<Void, Never>?
     private var tickTask: Task<Void, Never>?
+    /// Keeps macOS from napping the app or sleeping while a service is recorded, even when the
+    /// operator has another app in front.
+    private var activity: NSObjectProtocol?
     /// Recording time already in the session before this run started, so timestamps keep counting.
     private var timeOffset: TimeInterval = 0
     private var latestAudioTime: TimeInterval = 0
@@ -43,6 +50,7 @@ final class RecordingController {
 
     init(context: ModelContext) {
         self.context = context
+        Task { await capture.prepare() }
     }
 
     var isActive: Bool { state == .recording || state == .paused || state == .starting }
@@ -63,6 +71,14 @@ final class RecordingController {
 
     func start(into session: Session) async {
         guard state == .idle else { return }
+        let startedAt = ContinuousClock.now
+        var phaseStart = startedAt
+        var phases: [(String, Duration)] = []
+        func mark(_ name: String) {
+            let now = ContinuousClock.now
+            phases.append((name, now - phaseStart))
+            phaseStart = now
+        }
         state = .starting
         errorMessage = nil
         problem = nil
@@ -72,6 +88,7 @@ final class RecordingController {
             state = .idle
             return
         }
+        mark("microphone permission")
 
         let defaults = UserDefaults.standard
         let localeID = defaults.string(forKey: SettingsKey.locale) ?? Locale.current.identifier
@@ -79,8 +96,12 @@ final class RecordingController {
         let deviceID = deviceUID.isEmpty ? nil : AudioDeviceCatalog.device(withUID: deviceUID)?.id
 
         do {
-            let transcriber = try await TranscriberFactory.make(locale: Locale(identifier: localeID))
+            // Open the input and prepare the speech model at the same time.
+            async let made = TranscriberFactory.make(locale: Locale(identifier: localeID))
             let captured = try await capture.start(deviceID: deviceID)
+            mark("audio input")
+            let transcriber = try await made
+            mark("speech model lookup")
             let (audio, audioOutput) = AsyncStream.makeStream(of: AudioChunk.self, bufferingPolicy: .bufferingNewest(256))
             forwardTask = Task.detached { [weak self] in
                 var lastLevel = ContinuousClock.now
@@ -97,6 +118,7 @@ final class RecordingController {
             }
 
             let events = try await transcriber.start(audio: audio)
+            mark("speech analyzer start")
             self.transcriber = transcriber
             self.engine = transcriber.engine
             self.session = session
@@ -119,7 +141,13 @@ final class RecordingController {
             }
             startAutosave()
             startTicks()
+            activity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .idleSystemSleepDisabled, .latencyCritical],
+                reason: "Recording and transcribing a service"
+            )
             state = .recording
+            lastStartDuration = ContinuousClock.now - startedAt
+            lastStartPhases = phases
         } catch let error as TranscriberError where error == .speechPermissionDenied {
             await capture.stop()
             problem = .speechRecognition
@@ -202,6 +230,9 @@ final class RecordingController {
     }
 
     private func finishSession() {
+        if let activity { ProcessInfo.processInfo.endActivity(activity) }
+        activity = nil
+        Task { await capture.prepare() }
         autosaveTask?.cancel()
         tickTask?.cancel()
         session?.isRecording = false

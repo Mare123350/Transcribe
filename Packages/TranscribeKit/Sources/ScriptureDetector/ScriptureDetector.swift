@@ -25,10 +25,17 @@ public actor ScriptureDetector {
         quoteIndex = nil
     }
 
-    /// Builds the quote index. Takes a few seconds; call once in the background after launch.
-    public func prepareQuoteIndex() {
+    /// Builds (or loads from `cacheDirectory`) the quote index. The work runs off this actor, so
+    /// references and passages keep working while it's prepared.
+    public func prepareQuoteIndex(cacheDirectory: URL? = nil) async {
         guard quoteIndex == nil else { return }
-        quoteIndex = QuoteIndex(translations: translations)
+        let translations = self.translations
+        let index = await Task.detached(priority: .utility) {
+            QuoteIndex.loadOrBuild(translations: translations, cacheDirectory: cacheDirectory)
+        }.value
+        // The translations may have changed (an import) while it was building.
+        guard self.translations.map(\.info.id) == translations.map(\.info.id), quoteIndex == nil else { return }
+        quoteIndex = index
     }
 
     // MARK: References

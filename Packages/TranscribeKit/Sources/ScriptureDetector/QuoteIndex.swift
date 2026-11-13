@@ -42,7 +42,49 @@ public final class QuoteIndex: Sendable {
         entries = kept
     }
 
+    init(entries: [UInt64]) {
+        self.entries = entries
+    }
+
     public var count: Int { entries.count }
+
+    // MARK: Disk cache
+
+    /// Bumped when the index format or tokenizer changes, so old caches are ignored.
+    static let formatVersion = 1
+
+    /// A name that changes whenever the translations (or their files) change.
+    static func cacheName(for translations: [BibleTranslation]) -> String {
+        var parts = ["v\(formatVersion)"]
+        for translation in translations.sorted(by: { $0.info.id < $1.info.id }) {
+            let attributes = try? FileManager.default.attributesOfItem(atPath: translation.url.path)
+            let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+            let modified = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+            parts.append("\(translation.info.id):\(size):\(Int(modified))")
+        }
+        return String(format: "quote-index-%016llx.bin", Similarity.hash(words: parts[...]))
+    }
+
+    /// Loads the index from `directory` if it was built for these translations; otherwise builds
+    /// it and saves it there. Building takes seconds; loading takes milliseconds.
+    public static func loadOrBuild(translations: [BibleTranslation], cacheDirectory: URL?) -> QuoteIndex {
+        guard let cacheDirectory else { return QuoteIndex(translations: translations) }
+        let url = cacheDirectory.appendingPathComponent(cacheName(for: translations))
+        if let data = try? Data(contentsOf: url, options: .mappedIfSafe), data.count % 8 == 0, !data.isEmpty {
+            let entries = data.withUnsafeBytes { Array($0.bindMemory(to: UInt64.self)) }
+            return QuoteIndex(entries: entries)
+        }
+        let index = QuoteIndex(translations: translations)
+        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        // Old caches for other translation sets are no longer needed.
+        for old in (try? FileManager.default.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil)) ?? []
+        where old.lastPathComponent.hasPrefix("quote-index-") {
+            try? FileManager.default.removeItem(at: old)
+        }
+        let data = index.entries.withUnsafeBytes { Data($0) }
+        try? data.write(to: url, options: .atomic)
+        return index
+    }
 
     /// Verses sharing at least `minimumHits` distinct n-grams with `tokens`, most hits first.
     public func candidates(for tokens: [String], minimumHits: Int = 3, limit: Int = 5) -> [(reference: BibleReference, hits: Int)] {

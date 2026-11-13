@@ -172,6 +172,7 @@ final class SongService {
     private func fold(_ segment: TranscriptItem, under parentItemID: UUID) {
         guard UserDefaults.standard.object(forKey: SettingsKey.replaceSungText) as? Bool ?? true else { return }
         segment.parentItemID = parentItemID
+        TranscriptLayout.invalidate(segment.session)
     }
 
     // MARK: Operator actions
@@ -186,6 +187,7 @@ final class SongService {
         if let songID = item.songID { tracker.dismiss(songID, at: now) }
         for segment in item.session?.items ?? [] where segment.parentItemID == item.id {
             segment.parentItemID = nil
+            TranscriptLayout.invalidate(segment.session)
         }
         if currentItemID == item.id { currentItemID = nil }
         if pendingItemID == item.id { pendingItemID = nil }
@@ -220,7 +222,13 @@ final class SongService {
         item.session = session
     }
 
+    /// Items this service has looked up, so the main thread doesn't run a fetch per lookup.
+    private var known: [UUID: TranscriptItem] = [:]
+
     private func item(_ id: UUID) -> TranscriptItem? {
-        try? context.fetch(FetchDescriptor<TranscriptItem>(predicate: #Predicate { $0.id == id })).first
+        if let cached = known[id], !cached.isDeleted, cached.modelContext != nil { return cached }
+        let found = try? context.fetch(FetchDescriptor<TranscriptItem>(predicate: #Predicate { $0.id == id })).first
+        known[id] = found
+        return found
     }
 }

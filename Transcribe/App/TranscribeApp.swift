@@ -45,7 +45,7 @@ struct TranscribeApp: App {
     private static func makeContainer() -> ModelContainer {
         let schema = Schema([Session.self, TranscriptItem.self, StoredSong.self])
         #if DEBUG
-        if CommandLine.arguments.contains("-PipelineSelfTest") {
+        if CommandLine.arguments.contains("-PipelineSelfTest") || CommandLine.arguments.contains("-PerformanceSelfTest") {
             return try! ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
         }
         #endif

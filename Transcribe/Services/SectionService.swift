@@ -188,13 +188,17 @@ final class SectionService {
     /// The section in effect at the end of the transcript (or just before `item`).
     func currentSection(in session: Session, before item: TranscriptItem? = nil) -> ServiceSectionKind? {
         let limit = item?.sortIndex ?? .infinity
-        let header = session.items
-            .filter { $0.kind == .header && $0.sortIndex < limit }
-            .max { $0.sortIndex < $1.sortIndex }
+        let header = session.layout.headers.last { $0.sortIndex < limit }
         return header?.sectionType.flatMap { ServiceSectionKind(rawValue: $0.rawValue) }
     }
 
+    /// Items this service has looked up, so the main thread doesn't run a fetch per lookup.
+    private var known: [UUID: TranscriptItem] = [:]
+
     private func item(_ id: UUID) -> TranscriptItem? {
-        try? context.fetch(FetchDescriptor<TranscriptItem>(predicate: #Predicate { $0.id == id })).first
+        if let cached = known[id], !cached.isDeleted, cached.modelContext != nil { return cached }
+        let found = try? context.fetch(FetchDescriptor<TranscriptItem>(predicate: #Predicate { $0.id == id })).first
+        known[id] = found
+        return found
     }
 }

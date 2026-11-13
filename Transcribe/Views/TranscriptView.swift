@@ -11,7 +11,7 @@ struct TranscriptView: View {
     private static let bottomID = "transcript-bottom"
 
     var body: some View {
-        let items = session.orderedItems
+        let layout = session.layout
         let isLive = model.recorder.session === session && model.recorder.isActive
         ScrollViewReader { proxy in
             ScrollView {
@@ -19,13 +19,14 @@ struct TranscriptView: View {
                     TranscriptHeaderView(session: session)
                         .padding(.bottom, 8)
 
-                    ForEach(items.filter { $0.parentItemID == nil }) { item in
-                        TranscriptItemRow(item: item, session: session, allItems: items)
-                            .id(item.id)
+                    ForEach(layout.rows) { row in
+                        TranscriptItemRow(item: row.item, session: session, children: layout.children[row.id] ?? [])
+                            .id(row.id)
                     }
 
                     if isLive {
-                        VolatileRow(text: model.recorder.volatileText, paused: model.recorder.state == .paused)
+                        // Reads the in-progress text itself, so only this row redraws as words arrive.
+                        VolatileRow()
                     }
                     Color.clear.frame(height: 1).id(Self.bottomID)
                 }
@@ -35,11 +36,11 @@ struct TranscriptView: View {
                 .frame(maxWidth: 900, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
-            .onChange(of: items.count) {
+            .onChange(of: layout.ordered.count) {
                 if isLive && followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
             }
-            .onChange(of: model.recorder.volatileText) {
-                if isLive && followLive { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+            .background {
+                if isLive && followLive { FollowVolatileText(proxy: proxy, target: Self.bottomID) }
             }
             .onChange(of: model.scrollTarget) {
                 guard let target = model.scrollTarget else { return }
@@ -48,7 +49,7 @@ struct TranscriptView: View {
                 model.scrollTarget = nil
             }
             .overlay(alignment: .top) {
-                if let id = model.songs.pendingItemID, let pending = items.first(where: { $0.id == id }), pending.status == .detected {
+                if let id = model.songs.pendingItemID, let pending = layout.songs.last(where: { $0.id == id }), pending.status == .detected {
                     DetectedSongChip(item: pending)
                         .padding(.top, 10)
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -96,12 +97,26 @@ private struct TranscriptHeaderView: View {
     }
 }
 
-/// Text the speech model is still working on, shown in grey until it's finalized.
-private struct VolatileRow: View {
-    let text: String
-    let paused: Bool
+/// Keeps the newest words in view as they arrive. Separate so the transcript itself doesn't
+/// re-render for every partial result.
+private struct FollowVolatileText: View {
+    let proxy: ScrollViewProxy
+    let target: String
+    @Environment(AppModel.self) private var model
 
     var body: some View {
+        Color.clear
+            .onChange(of: model.recorder.volatileText) { proxy.scrollTo(target, anchor: .bottom) }
+    }
+}
+
+/// Text the speech model is still working on, shown in grey until it's finalized.
+private struct VolatileRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let text = model.recorder.volatileText
+        let paused = model.recorder.state == .paused
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: paused ? "pause.circle" : "waveform")
                 .foregroundStyle(.secondary)
@@ -130,13 +145,13 @@ struct TimestampLabel: View {
 struct TranscriptItemRow: View {
     let item: TranscriptItem
     let session: Session
-    let allItems: [TranscriptItem]
+    let children: [TranscriptItem]
 
     var body: some View {
         switch item.kind {
         case .segment: SegmentRow(item: item, session: session)
         case .header: HeaderRow(item: item, session: session)
-        case .song: SongBlockView(item: item, session: session, sungSegments: allItems.filter { $0.parentItemID == item.id })
+        case .song: SongBlockView(item: item, session: session, sungSegments: children)
         case .verse: VerseCalloutView(item: item, session: session)
         }
     }

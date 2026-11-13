@@ -6,10 +6,8 @@ struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let items = session.orderedItems
-        let headers = items.filter { $0.kind == .header }
-        let songs = items.filter { $0.kind == .song }
-        let verses = items.filter { $0.kind == .verse }
+        let layout = session.layout
+        let headers = layout.headers, songs = layout.songs, verses = layout.verses
 
         List {
             Section("Sections") {

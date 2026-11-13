@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftData
+import Transcriber
 
 /// App-wide state shared by the main window, menus, presentation window, and settings.
 @MainActor
@@ -23,9 +24,14 @@ final class AppModel {
     let songs: SongService
     let sections: SectionService
 
-    /// Finalized segments are analysed one at a time, in order, by each detector.
-    private let segments: AsyncStream<(PersistentIdentifier, PersistentIdentifier)>.Continuation
+    /// Finalized segments are analysed one at a time, in order. Songs and scripture are quick;
+    /// section headers wait for the on-device language model (seconds), so they run in their own
+    /// queue and never hold up a verse card.
+    private let segments: AsyncStream<SegmentRef>.Continuation
+    private let sectionSegments: AsyncStream<SegmentRef>.Continuation
     private var pipelineTask: Task<Void, Never>?
+    private var sectionTask: Task<Void, Never>?
+    private var pendingSectionSegments = 0
 
     init(container: ModelContainer) {
         self.container = container
@@ -33,17 +39,24 @@ final class AppModel {
         self.scripture = ScriptureService(context: container.mainContext)
         self.songs = SongService(context: container.mainContext)
         self.sections = SectionService(context: container.mainContext)
-        let (stream, continuation) = AsyncStream.makeStream(of: (PersistentIdentifier, PersistentIdentifier).self)
+        let (stream, continuation) = AsyncStream.makeStream(of: SegmentRef.self)
         self.segments = continuation
+        let (sectionStream, sectionContinuation) = AsyncStream.makeStream(of: SegmentRef.self)
+        self.sectionSegments = sectionContinuation
         recoverInterruptedSessions()
 
-        recorder.onSegment = { [continuation] item, session in continuation.yield((item.persistentModelID, session.persistentModelID)) }
+        recorder.onSegment = { [continuation] item, session in continuation.yield(SegmentRef(item: item, session: session)) }
         pipelineTask = Task { [weak self] in
-            for await (itemID, sessionID) in stream {
-                guard let self,
-                      let item = self.context.model(for: itemID) as? TranscriptItem,
-                      let session = self.context.model(for: sessionID) as? Session else { continue }
+            for await ref in stream {
+                guard let self, let (item, session) = ref.live else { continue }
                 await self.analyse(item, in: session)
+            }
+        }
+        sectionTask = Task { [weak self] in
+            for await ref in sectionStream {
+                guard let self else { continue }
+                if let (item, session) = ref.live { await self.sections.process(item, in: session) }
+                self.pendingSectionSegments -= 1
             }
         }
         recorder.onTick = { [weak self] _, _ in self?.songs.tick() }
@@ -51,8 +64,14 @@ final class AppModel {
         scripture.onPassageRead = { [weak self] callout, session in self?.sections.passageRead(callout, in: session) }
         songs.load()
         Task { await scripture.load() }
+        Task.detached(priority: .utility) {
+            let locale = UserDefaults.standard.string(forKey: SettingsKey.locale) ?? Locale.current.identifier
+            await TranscriberFactory.prewarm(locale: Locale(identifier: locale))
+        }
         #if DEBUG
         if PipelineSelfTest.isRequested { Task { await PipelineSelfTest.run(self) } }
+        if LiveSelfTest.isRequested { Task { await LiveSelfTest.run(self) } }
+        if PerformanceSelfTest.isRequested { Task { await PerformanceSelfTest.run(self) } }
         #endif
     }
 
@@ -66,7 +85,12 @@ final class AppModel {
         let sung = songs.process(segment, in: session)
         if !sung {
             await scripture.process(segment, in: session)
-            await sections.process(segment, in: session)
+            #if DEBUG
+            // The self-test checks the finished structure, so it classifies in step.
+            if PipelineSelfTest.isRequested { await sections.process(segment, in: session); return }
+            #endif
+            pendingSectionSegments += 1
+            sectionSegments.yield(SegmentRef(item: segment, session: session))
         }
     }
 
@@ -119,6 +143,9 @@ final class AppModel {
     func stopRecording() async {
         let session = recorder.session
         await recorder.stop()
+        // Let queued lines reach the classifier before the last section is flushed.
+        let deadline = ContinuousClock.now + .seconds(20)
+        while pendingSectionSegments > 0 && ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(100)) }
         if let session { await sections.flush(in: session) }
     }
 
@@ -167,5 +194,19 @@ final class AppModel {
             if !session.title.hasSuffix("(recovered)") { session.title += " (recovered)" }
         }
         try? context.save()
+    }
+}
+
+/// A segment waiting to be analysed. Passes the objects themselves: a persistent identifier taken
+/// before the first save is temporary, and looking it up after an autosave crashes. Both ends of
+/// the queues run on the main actor.
+struct SegmentRef: @unchecked Sendable {
+    let item: TranscriptItem
+    let session: Session
+
+    /// Nil if either was deleted while waiting.
+    @MainActor var live: (TranscriptItem, Session)? {
+        guard !item.isDeleted, item.modelContext != nil, !session.isDeleted, session.modelContext != nil else { return nil }
+        return (item, session)
     }
 }

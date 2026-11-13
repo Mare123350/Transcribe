@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import Accelerate
 import AudioToolbox
 import CoreAudio
 import Foundation
@@ -39,6 +40,8 @@ public enum AudioCaptureError: LocalizedError, Sendable {
 public actor AudioCaptureEngine {
     private var engine: AVAudioEngine?
     private var continuation: AsyncStream<AudioChunk>.Continuation?
+    /// An engine whose input is already connected, so Record starts quickly.
+    private var prepared: AVAudioEngine?
 
     public init() {}
 
@@ -54,12 +57,23 @@ public actor AudioCaptureEngine {
         }
     }
 
+    /// Connects to the audio hardware ahead of time (a few hundred milliseconds the first time).
+    /// Doesn't start capturing or turn on the microphone indicator.
+    public func prepare() {
+        _ = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard engine == nil, prepared == nil else { return }
+        let engine = AVAudioEngine()
+        _ = engine.inputNode.outputFormat(forBus: 0)
+        prepared = engine
+    }
+
     /// Starts capturing. `deviceID` nil means the system default input.
     public func start(deviceID: AudioDeviceID?) throws -> AsyncStream<AudioChunk> {
         stop()
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw AudioCaptureError.microphoneDenied }
 
-        let engine = AVAudioEngine()
+        let engine = prepared ?? AVAudioEngine()
+        prepared = nil
         let input = engine.inputNode
         if let deviceID {
             guard let unit = input.audioUnit else { throw AudioCaptureError.deviceUnavailable }
@@ -131,10 +145,8 @@ public actor AudioCaptureEngine {
 
     private nonisolated static func level(of buffer: AVAudioPCMBuffer) -> Float {
         guard let data = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
-        let samples = data[0]
-        var sum: Float = 0
-        for i in 0..<Int(buffer.frameLength) { sum += samples[i] * samples[i] }
-        let rms = (sum / Float(buffer.frameLength)).squareRoot()
+        var rms: Float = 0
+        vDSP_rmsqv(data[0], 1, &rms, vDSP_Length(buffer.frameLength))
         let decibels = 20 * log10(max(rms, 0.000_01))
         return max(0, min(1, (decibels + 60) / 60))
     }

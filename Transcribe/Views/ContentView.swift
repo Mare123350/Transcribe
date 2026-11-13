@@ -36,6 +36,9 @@ struct ContentView: View {
             .inspectorColumnWidth(min: 240, ideal: 280, max: 400)
         }
         .toolbar { RecordingToolbar() }
+        #if DEBUG
+        .onAppear { LaunchTiming.windowAppeared(model) }
+        #endif
         .sheet(isPresented: $model.isExporting) {
             if let session = model.selectedSession {
                 ExportSheet(session: session)

@@ -58,6 +58,11 @@ public protocol LiveTranscriber: Actor {
 }
 
 public enum TranscriberFactory {
+    /// Call at launch: resolves the speech model for `locale` so recording starts quickly.
+    public static func prewarm(locale: Locale) async {
+        await AnalyzerTranscriber.prewarm(locale: locale)
+    }
+
     /// Prefers SpeechAnalyzer; falls back to the on-device SFSpeechRecognizer when SpeechTranscriber
     /// doesn't support this Mac or language.
     public static func make(locale: Locale) async throws -> any LiveTranscriber {

@@ -18,8 +18,16 @@ public actor AnalyzerTranscriber: LiveTranscriber {
     }
 
     public static func supportedLocale(for locale: Locale) async -> Locale? {
+        if let cached = await LocaleCache.shared.value(for: locale.identifier) { return cached }
         guard SpeechTranscriber.isAvailable else { return nil }
-        return await SpeechTranscriber.supportedLocale(equivalentTo: locale)
+        let supported = await SpeechTranscriber.supportedLocale(equivalentTo: locale)
+        await LocaleCache.shared.store(supported, for: locale.identifier)
+        return supported
+    }
+
+    /// Looks up the model for `locale` ahead of time so pressing Record is quick.
+    public static func prewarm(locale: Locale) async {
+        _ = await supportedLocale(for: locale)
     }
 
     public func start(audio: AsyncStream<AudioChunk>) async throws -> AsyncThrowingStream<TranscriptionEvent, Error> {
@@ -89,4 +97,13 @@ public actor AnalyzerTranscriber: LiveTranscriber {
         await resultsTask?.value
         analyzer = nil
     }
+}
+
+/// Supported-locale answers, which don't change while the app runs.
+actor LocaleCache {
+    static let shared = LocaleCache()
+    private var values: [String: Locale?] = [:]
+
+    func value(for identifier: String) -> Locale?? { values[identifier] }
+    func store(_ locale: Locale?, for identifier: String) { values[identifier] = locale }
 }
