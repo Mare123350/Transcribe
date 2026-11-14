@@ -115,6 +115,14 @@ final class OutputController {
         queue.removeAll { $0.source == source }
     }
 
+    /// Shows exactly this in Preview, replacing what was there without queueing it, and sends
+    /// it on its own: used for verses the operator types or picks from Recent.
+    func previewOnly(_ source: OutputSource) async {
+        guard let cue = await makeCue(source) else { return }
+        preview = cue
+        queue.removeAll()
+    }
+
     /// Preview goes live, and the next waiting detection moves into Preview.
     func take() {
         guard let preview else { return }

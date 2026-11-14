@@ -112,17 +112,21 @@ enum OutputSelfTest {
         render("5-song", output.live?.slide)
         lines.append("  live = \(describe(output.live))")
 
-        // 7. Typed by hand: "phil 4 13 web" to Preview, then live; "ps 23" into the transcript.
+        // 7. Typed by hand: only that verse shows, even with detections waiting.
         output.clearScreen()
-        while output.preview != nil { output.skipPreview() }
+        output.mode = .preview
+        _ = await feed(["Turn to Romans 8:28.", "And Isaiah 40:31."], clear: false)
+        lines.append("BEFORE TYPING: preview = \(describe(output.preview)), waiting \(output.queue.count)")
+        let chapterOnly = ReferenceParser.parseEntry("gen 1", versions: ["KJV"])?.reference.reference
+        lines.append("TYPED 'gen 1': has a verse = \(chapterOnly?.verseStart != nil) (the field asks for one)")
         let versions = model.scripture.allVersionNames.map(\.abbreviation)
         if let typed = ReferenceParser.parseEntry("phil 4 13 web", versions: versions) {
             let version = typed.version ?? model.scripture.defaultAbbreviation
             model.scripture.remember(typed.reference.reference, version: version)
-            await output.showInPreview(.passage(typed.reference.reference, version: version))
-            lines.append("TYPED 'phil 4 13 web': preview = \(describe(output.preview))")
+            await output.previewOnly(.passage(typed.reference.reference, version: version))
+            lines.append("TYPED 'phil 4 13 web': preview = \(describe(output.preview)), waiting \(output.queue.count)")
             output.take()
-            lines.append("  sent: live = \(describe(output.live))")
+            lines.append("  sent: live = \(describe(output.live)); preview afterwards = \(describe(output.preview))")
             render("6-typed", output.live?.slide)
         }
         if let typed = ReferenceParser.parseEntry("ps 23", versions: versions), let session = model.selectedSession {

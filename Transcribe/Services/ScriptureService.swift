@@ -62,10 +62,13 @@ final class ScriptureService {
 
     /// Verses the operator looked up by hand, newest first.
     private(set) var recentVerses: [RecentVerse] = {
-        UserDefaults.standard.data(forKey: SettingsKey.recentVerses).flatMap { try? JSONDecoder().decode([RecentVerse].self, from: $0) } ?? []
+        // Whole chapters aren't kept: only the exact verses typed.
+        (UserDefaults.standard.data(forKey: SettingsKey.recentVerses).flatMap { try? JSONDecoder().decode([RecentVerse].self, from: $0) } ?? [])
+            .filter { $0.reference.verseStart != nil }
     }()
 
     func remember(_ reference: BibleReference, version: String) {
+        guard reference.verseStart != nil else { return }
         let entry = RecentVerse(reference: reference, version: version)
         recentVerses = Array(([entry] + recentVerses.filter { $0 != entry }).prefix(20))
         UserDefaults.standard.set(try? JSONEncoder().encode(recentVerses), forKey: SettingsKey.recentVerses)

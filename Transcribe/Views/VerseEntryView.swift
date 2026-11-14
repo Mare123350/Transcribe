@@ -12,6 +12,11 @@ struct VerseEntryView: View {
 
     private var versions: [String] { model.scripture.allVersionNames.map(\.abbreviation) }
     private var parsed: (reference: DetectedReference, version: String?)? { ReferenceParser.parseEntry(text, versions: versions) }
+    /// Only a specific verse or range is shown: "gen 1" alone would put the whole chapter up.
+    private var exact: BibleReference? {
+        guard let reference = parsed?.reference.reference, reference.verseStart != nil else { return nil }
+        return reference
+    }
     private var version: String {
         parsed?.version ?? (chosenVersion.isEmpty ? model.scripture.defaultAbbreviation : chosenVersion)
     }
@@ -44,7 +49,10 @@ struct VerseEntryView: View {
             .background(.background, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(focused ? Color.accentColor : Color.secondary.opacity(0.3)))
 
-            if let parsed {
+            if let parsed, exact == nil {
+                Text("Add a verse number, e.g. “\(parsed.reference.reference.description) 1”.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if let parsed {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(parsed.reference.reference.description) · \(version)").font(.caption.weight(.semibold))
                     Text(verseText.isEmpty ? "Not in \(version)." : verseText)
@@ -70,7 +78,7 @@ struct VerseEntryView: View {
                 DisclosureGroup("Recent") {
                     ForEach(model.scripture.recentVerses.prefix(8)) { recent in
                         Button {
-                            Task { await model.output.showInPreview(.passage(recent.reference, version: recent.version)) }
+                            Task { await model.output.previewOnly(.passage(recent.reference, version: recent.version)) }
                         } label: {
                             HStack {
                                 Text(recent.reference.description)
@@ -84,7 +92,7 @@ struct VerseEntryView: View {
                         .help("Show in Preview")
                         .contextMenu {
                             Button("Send to Screen") { Task { await model.output.send(.passage(recent.reference, version: recent.version)) } }
-                            Button("Show in Preview") { Task { await model.output.showInPreview(.passage(recent.reference, version: recent.version)) } }
+                            Button("Show in Preview") { Task { await model.output.previewOnly(.passage(recent.reference, version: recent.version)) } }
                             Button("Add to Transcript") { insert(recent.reference, version: recent.version) }
                                 .disabled(model.selectedSession == nil)
                             Divider()
@@ -96,8 +104,8 @@ struct VerseEntryView: View {
             }
         }
         .task(id: "\(text)|\(version)") {
-            guard let parsed else { verseText = ""; return }
-            verseText = await model.scripture.text(of: parsed.reference.reference, abbreviation: version) ?? ""
+            guard let exact else { verseText = ""; return }
+            verseText = await model.scripture.text(of: exact, abbreviation: version) ?? ""
         }
         .onChange(of: model.verseEntryFocusRequest) { focused = true }
     }
@@ -105,11 +113,11 @@ struct VerseEntryView: View {
     private enum Action { case preview, send, transcript }
 
     private func act(_ action: Action) {
-        guard let reference = parsed?.reference.reference, !verseText.isEmpty else { return }
+        guard let reference = exact, !verseText.isEmpty else { return }
         let version = version
         model.scripture.remember(reference, version: version)
         switch action {
-        case .preview: Task { await model.output.showInPreview(.passage(reference, version: version)) }
+        case .preview: Task { await model.output.previewOnly(.passage(reference, version: version)) }
         case .send: Task { await model.output.send(.passage(reference, version: version)) }
         case .transcript: insert(reference, version: version)
         }
