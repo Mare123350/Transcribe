@@ -93,10 +93,16 @@ struct OutputSlideView: View {
 struct OutputWindowView: View {
     @Environment(AppModel.self) private var model
     @State private var window: NSWindow?
+    /// True when the output is an ordinary window (one display), not a projector.
+    @State private var windowed = true
 
     var body: some View {
         OutputSlideView(slide: model.output.live?.slide, theme: model.output.theme)
             .ignoresSafeArea()
+            .overlay {
+                // On a projector an empty screen stays black; in a window, say what to do.
+                if windowed && model.output.live == nil { emptyHint }
+            }
             .background(WindowAccessor(window: $window))
             .onChange(of: window) { place() }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in place() }
@@ -105,9 +111,31 @@ struct OutputWindowView: View {
 
     /// Fills the chosen display, borderless, above its menu bar. On a single-display Mac it stays
     /// an ordinary window so it doesn't cover the operator's screen.
+    private var emptyHint: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "rectangle.on.rectangle").font(.system(size: 36))
+            Text("Nothing on screen").font(.title2.weight(.semibold))
+            Group {
+                if let heading = model.output.preview?.slide?.heading {
+                    Text("“\(heading)” is in Preview. Press Send (⌘↩) to show it here.")
+                } else {
+                    Text("Send a verse or song from its card, or type one with ⌘K.")
+                }
+            }
+            .font(.callout)
+            Text("Connect a projector or second display and this window fills it automatically.")
+                .font(.caption)
+                .padding(.top, 6)
+        }
+        .multilineTextAlignment(.center)
+        .foregroundStyle(.white.opacity(0.6))
+        .padding()
+    }
+
     private func place() {
         guard let window, let screen = model.output.outputScreen else { return }
-        if NSScreen.screens.count > 1 && screen != NSScreen.main {
+        windowed = !(NSScreen.screens.count > 1 && screen != NSScreen.main)
+        if !windowed {
             window.styleMask = [.borderless]
             window.level = .mainMenu + 1
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -201,7 +229,7 @@ struct OutputPanel: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(live && cue != nil ? Color.red : Color.secondary.opacity(0.3), lineWidth: live && cue != nil ? 2 : 1))
                 .overlay {
                     if cue == nil {
-                        Text(live ? "Screen is clear" : "Nothing in preview").font(.caption).foregroundStyle(.secondary)
+                        Text(live ? "Screen is clear" : "Nothing in preview").font(.caption).foregroundStyle(.white.opacity(0.6))
                     }
                 }
         }

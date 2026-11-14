@@ -21,7 +21,7 @@ struct TranscribeApp: App {
         .modelContainer(container)
         .commands { TranscribeCommands(model: model) }
 
-        Window("Presentation", id: WindowID.presentation) {
+        Window("Live Transcript", id: WindowID.presentation) {
             PresentationView()
                 .environment(model)
         }
@@ -34,7 +34,6 @@ struct TranscribeApp: App {
         }
         .modelContainer(container)
         .defaultSize(width: 960, height: 540)
-        .windowStyle(.hiddenTitleBar)
 
         Window("Song Library", id: WindowID.songLibrary) {
             SongLibraryView()

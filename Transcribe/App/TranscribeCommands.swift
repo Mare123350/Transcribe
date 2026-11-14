@@ -84,7 +84,7 @@ struct TranscribeCommands: Commands {
             Divider()
             Button("Song Library") { openWindow(id: WindowID.songLibrary) }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
-            Button("Presentation Mode") { openWindow(id: WindowID.presentation) }
+            Button("Live Transcript Window") { openWindow(id: WindowID.presentation) }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
             Button(model.showInspector ? "Hide Inspector" : "Show Inspector") { model.showInspector.toggle() }
                 .keyboardShortcut("i", modifiers: [.command, .option])

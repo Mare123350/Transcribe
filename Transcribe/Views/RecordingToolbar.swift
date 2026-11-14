@@ -34,10 +34,10 @@ struct RecordingToolbar: ToolbarContent {
             }
             .disabled(model.selectedSession == nil)
             .help("Export as Markdown, PDF, Word, or text (⌘E)")
-            Button { openWindow(id: WindowID.presentation) } label: {
-                Label("Presentation", systemImage: "rectangle.on.rectangle")
+            Button { openWindow(id: WindowID.output) } label: {
+                Label("Output Screen", systemImage: "rectangle.on.rectangle")
             }
-            .help("Open presentation mode (⇧⌘P)")
+            .help("Open the output screen for the projector or second display (⌥⌘O)")
             Button { model.showInspector.toggle() } label: {
                 Label("Inspector", systemImage: "sidebar.right")
             }

@@ -34,8 +34,8 @@ struct PresentationView: View {
                 .onChange(of: items.last?.id) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                 .onChange(of: model.recorder.volatileText) { proxy.scrollTo("end", anchor: .bottom) }
             }
-            if session == nil {
-                Text("Nothing to present yet. Start recording in the main window.")
+            if session == nil || items.isEmpty {
+                Text("The live transcript appears here as you record. For verses and lyrics on a projector, use the Output Screen (⌥⌘O).")
                     .font(.title)
                     .foregroundStyle(.white.opacity(0.6))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
