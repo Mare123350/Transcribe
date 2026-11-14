@@ -35,6 +35,10 @@ final class ScriptureService {
     /// The passage being discussed, so "the next verse" and "verse 18" can be understood.
     private var lastReference: (reference: BibleReference, time: TimeInterval)?
     static let contextWindow: TimeInterval = 180
+    /// A card shown from in-progress text before the phrase is finished. The finished segment
+    /// adopts it (moving and correcting it) or removes it.
+    private var provisional: (itemID: UUID, key: String)?
+    private var lastPartial = ""
 
     private struct Listening {
         let itemID: UUID
@@ -213,14 +217,70 @@ final class ScriptureService {
 
     func reset() {
         listening.removeAll()
+        provisional = nil
+        lastPartial = ""
         recent.removeAll()
         previousSegment = nil
         recentWords.removeAll()
         lastReference = nil
     }
 
+    /// Looks for a reference in the words still being spoken, so its card appears mid-sentence.
+    /// Only confident, explicit references; the finished segment confirms or corrects it.
+    func processPartial(_ text: String, in session: Session) async {
+        guard text != lastPartial else { return }
+        lastPartial = text
+        if let last = lastReference, session.duration - last.time > Self.contextWindow { lastReference = nil }
+        let found = detector.references(in: text, context: lastReference?.reference)
+            .filter { $0.confidence >= 0.75 && $0.form == .absolute }
+        guard let detection = found.last else { return }
+        let reference = detection.reference
+        let named = detector.namedVersion(in: text)
+
+        if let current = provisional, let item = item(current.itemID) {
+            // "John 3" became "John 3:16" as the speaker went on.
+            guard current.key != reference.key else { return }
+            provisional = (current.itemID, reference.key)
+            item.reference = reference.description
+            item.referenceKey = reference.key
+            await show(item, reference: reference, requested: named)
+            return
+        }
+        guard !recent.contains(where: { $0.key == reference.key }) else { return }
+
+        let item = TranscriptItem(kind: .verse, sortIndex: session.nextSortIndex, timestamp: session.duration)
+        item.verseSource = .reference
+        item.reference = reference.description
+        item.referenceKey = reference.key
+        item.referenceConfidence = detection.confidence
+        context.insert(item)
+        item.session = session
+        known[item.id] = item
+        provisional = (item.id, reference.key)
+        await show(item, reference: reference, requested: named)
+    }
+
+    /// The card shown from in-progress text, moved to just after the segment that finished it.
+    private func adoptProvisional(after segment: TranscriptItem, in session: Session) -> TranscriptItem? {
+        guard let current = provisional else { return nil }
+        provisional = nil
+        guard let item = item(current.itemID) else { return nil }
+        item.sortIndex = session.sortIndex(after: segment)
+        item.timestamp = segment.timestamp
+        TranscriptLayout.invalidate(session)
+        return item
+    }
+
     /// Handles one finalized segment. Sung segments (inside a song) are ignored.
     func process(_ segment: TranscriptItem, in session: Session) async {
+        lastPartial = ""
+        defer {
+            // The finished words had no reference after all: take the early card away.
+            if let leftover = provisional {
+                provisional = nil
+                if let item = item(leftover.itemID) { remove(item) }
+            }
+        }
         let text = segment.text
         let time = segment.timestamp
         let previous = previousSegment
@@ -281,7 +341,8 @@ final class ScriptureService {
         }) else { return }
 
         if detection.confidence >= 0.75 { lastReference = (reference, segment.timestamp) }
-        let item = TranscriptItem(kind: .verse, sortIndex: session.sortIndex(after: segment), timestamp: segment.timestamp)
+        let item = adoptProvisional(after: segment, in: session)
+            ?? TranscriptItem(kind: .verse, sortIndex: session.sortIndex(after: segment), timestamp: segment.timestamp)
         item.verseSource = .reference
         item.reference = reference.description
         item.referenceKey = reference.key

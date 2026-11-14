@@ -56,19 +56,25 @@ public actor AnalyzerTranscriber: LiveTranscriber {
         self.analyzer = analyzer
 
         resultsTask = Task {
+            // The newest in-progress text and where it starts in the audio. A final result for
+            // earlier audio can arrive after in-progress text for later audio; that text is kept.
+            var pending = ""
+            var pendingStart = 0.0
             do {
                 for try await result in transcriber.results {
                     let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let start = result.range.start.seconds.isFinite ? result.range.start.seconds : 0
+                    let end = result.range.end.seconds.isFinite ? result.range.end.seconds : start
                     if result.isFinal {
-                        guard !text.isEmpty else { continue }
-                        let start = result.range.start.seconds
-                        let end = result.range.end.seconds
-                        output.yield(.finalized(TranscribedSegment(
-                            text: text,
-                            start: start.isFinite ? start : 0,
-                            end: end.isFinite ? end : 0
-                        )))
+                        if pendingStart < end - 0.05 { pending = "" }
+                        guard !text.isEmpty else {
+                            if pending.isEmpty { output.yield(.volatile("")) }
+                            continue
+                        }
+                        output.yield(.finalized(TranscribedSegment(text: text, start: start, end: end), pending: pending))
                     } else {
+                        pending = text
+                        pendingStart = start
                         output.yield(.volatile(text))
                     }
                 }

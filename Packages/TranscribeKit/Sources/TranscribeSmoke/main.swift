@@ -100,7 +100,7 @@ let reader = Task {
         if realtime, case .volatile(let text) = event { print(String(format: "  wall %6.2f volatile: %@", elapsed(), text)) }
         if realtime, case .finalized = event { print(String(format: "  wall %6.2f FINAL", elapsed())) }
         switch event {
-        case .finalized(let segment):
+        case .finalized(let segment, _):
             finals.append(segment)
             print(String(format: "[%6.2f-%6.2f] %@", segment.start, segment.end, segment.text))
         case .status(let message) where !message.isEmpty:

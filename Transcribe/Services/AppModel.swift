@@ -60,6 +60,7 @@ final class AppModel {
             }
         }
         recorder.onTick = { [weak self] _, _ in self?.songs.tick() }
+        recorder.onVolatile = { [weak self] text, session in self?.partialTextChanged(text, in: session) }
         songs.onSongStarted = { [weak self] song, session in self?.sections.songStarted(song, in: session) }
         scripture.onPassageRead = { [weak self] callout, session in self?.sections.passageRead(callout, in: session) }
         songs.load()
@@ -95,6 +96,24 @@ final class AppModel {
     }
 
     var context: ModelContext { container.mainContext }
+
+    // MARK: Partial text
+
+    private var latestPartial: (text: String, session: Session)?
+    private var partialTask: Task<Void, Never>?
+
+    /// In-progress text is checked for scripture at most every 250 ms, newest text first.
+    private func partialTextChanged(_ text: String, in session: Session) {
+        latestPartial = (text, session)
+        guard partialTask == nil else { return }
+        partialTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self else { return }
+            self.partialTask = nil
+            guard let (text, session) = self.latestPartial, !text.isEmpty, !self.songs.isSinging else { return }
+            await self.scripture.processPartial(text, in: session)
+        }
+    }
 
     // MARK: - Sessions
 

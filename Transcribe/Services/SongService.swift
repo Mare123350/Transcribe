@@ -32,6 +32,9 @@ final class SongService {
 
     private var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
+    /// A library song is being sung right now.
+    var isSinging: Bool { currentItemID != nil }
+
     // MARK: Library
 
     /// Adds the bundled hymns the first time the app runs, then builds the matcher.

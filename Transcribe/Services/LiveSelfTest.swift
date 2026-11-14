@@ -31,11 +31,21 @@ enum LiveSelfTest {
         var lastTick = clock.now
         var maxGap = Duration.zero
         var segmentsSeen: [(Duration, String)] = []
+        var versesSeen: [UUID: (Duration, String)] = [:]
+        var interrupted = false
         var seenCount = 0
-        while clock.now - recordingStarted < .seconds(25) {
+        while clock.now - recordingStarted < .seconds(UserDefaults.standard.double(forKey: "LiveSeconds") > 0 ? UserDefaults.standard.double(forKey: "LiveSeconds") : 25) {
             let tick = clock.now
             maxGap = max(maxGap, tick - lastTick)
             lastTick = tick
+            if CommandLine.arguments.contains("-InterruptAt12"), !interrupted, tick - recordingStarted > .seconds(12) {
+                interrupted = true
+                segmentsSeen.append((tick - recordingStarted, "<< recognizer interrupted on purpose >>"))
+                await model.recorder.debugInterruptTranscriber()
+            }
+            for verse in model.selectedSession?.layout.verses ?? [] where versesSeen[verse.id] == nil {
+                versesSeen[verse.id] = (tick - recordingStarted, verse.reference)
+            }
             let items = model.selectedSession?.orderedItems.filter { $0.kind == .segment } ?? []
             if items.count > seenCount {
                 for item in items[seenCount...] { segmentsSeen.append((tick - recordingStarted, item.text)) }
@@ -57,6 +67,7 @@ enum LiveSelfTest {
         lines.append("first partial text after: \(firstVolatile.map { "\($0)" } ?? "none")")
         lines.append("longest main-thread gap while polling every 20 ms: \(maxGap)")
         for (time, text) in segmentsSeen { lines.append("  final at \(time): \(text)") }
+        for (time, reference) in versesSeen.values.sorted(by: { $0.0 < $1.0 }) { lines.append("  verse card \(reference) appeared at \(time)") }
         let seconds = updates.map { Double($0.components.seconds) + Double($0.components.attoseconds) / 1e18 }.sorted()
         if !seconds.isEmpty {
             lines.append(String(format: "partial updates: %d, median gap %.2fs, 90th %.2fs, max %.2fs",

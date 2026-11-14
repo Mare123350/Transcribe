@@ -7,6 +7,8 @@ struct TranscriptView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(SettingsKey.fontSize) private var fontSize = 16.0
     @State private var followLive = true
+    @State private var atBottom = true
+    @State private var userScrolling = false
 
     private static let bottomID = "transcript-bottom"
 
@@ -36,6 +38,18 @@ struct TranscriptView: View {
                 .frame(maxWidth: 900, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
+            // Scrolling up yourself pauses following the live text; scrolling back down resumes it.
+            // Content growing at the bottom doesn't count: only scrolls the user is making.
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 80
+            } action: { _, bottom in
+                atBottom = bottom
+                if userScrolling { followLive = bottom }
+            }
+            .onScrollPhaseChange { _, phase in
+                userScrolling = phase == .interacting || phase == .tracking || phase == .decelerating
+                if userScrolling && !atBottom { followLive = false }
+            }
             .onChange(of: layout.ordered.count) {
                 if isLive && followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
             }
@@ -62,10 +76,13 @@ struct TranscriptView: View {
                         followLive = true
                         withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
                     } label: {
-                        Label("Follow Live", systemImage: "arrow.down.to.line")
+                        Label("Jump to Live", systemImage: "arrow.down.to.line")
                     }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.end, modifiers: [.command])
+                    .help("Scroll to the newest text and keep following it (⌘↘)")
                     .padding()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }

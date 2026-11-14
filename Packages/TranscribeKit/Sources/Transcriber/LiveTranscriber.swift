@@ -18,7 +18,9 @@ public struct TranscribedSegment: Sendable, Equatable {
 public enum TranscriptionEvent: Sendable {
     /// In-progress text that may still change. Replaces the previous volatile text.
     case volatile(String)
-    case finalized(TranscribedSegment)
+    /// A finished segment, and the in-progress text that follows it ("" if none). Apply both at
+    /// once so the transcript never flickers or shows the same words twice.
+    case finalized(TranscribedSegment, pending: String)
     /// Something worth telling the operator, e.g. "Downloading the speech model…".
     case status(String)
 }

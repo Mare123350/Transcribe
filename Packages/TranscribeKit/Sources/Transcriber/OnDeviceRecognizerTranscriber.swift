@@ -105,10 +105,13 @@ public actor OnDeviceRecognizerTranscriber: LiveTranscriber {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if isFinal || failed {
             pendingTasks = max(0, pendingTasks - 1)
+            // An older request finishing while the next one is already hearing words: keep those.
+            let pending = offset == requestStart ? "" : partialText
             if !trimmed.isEmpty {
-                output?.yield(.finalized(TranscribedSegment(text: trimmed, start: offset, end: offset + duration)))
+                output?.yield(.finalized(TranscribedSegment(text: trimmed, start: offset, end: offset + duration), pending: pending))
+            } else {
+                output?.yield(.volatile(pending))
             }
-            output?.yield(.volatile(""))
             return
         }
         guard offset == requestStart else { return }

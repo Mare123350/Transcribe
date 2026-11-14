@@ -14,6 +14,8 @@ struct RecordingToolbar: ToolbarContent {
             .disabled(!model.recorder.isActive)
             .help("Stop (⌘.)")
 
+            RecordingClock()
+
             LevelMeter(recorder: model.recorder)
                 .frame(width: 70, height: 8)
                 .help("Input level")
@@ -158,5 +160,31 @@ private struct InputPicker: View {
 
     private var currentName: String {
         devices.first { $0.uid == inputUID }?.name ?? "System Default"
+    }
+}
+
+/// A clear recording state: a red dot and the running time while recording, "Paused" when paused.
+private struct RecordingClock: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let recorder = model.recorder
+        if recorder.state == .recording || recorder.state == .paused {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                HStack(spacing: 5) {
+                    Image(systemName: recorder.state == .paused ? "pause.circle.fill" : "circle.fill")
+                        .foregroundStyle(.red)
+                        .imageScale(.small)
+                        .symbolEffect(.pulse, isActive: recorder.state == .recording)
+                    Text(recorder.state == .paused ? "Paused" : "REC")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.red)
+                    Text(TimeFormat.clock(recorder.elapsed(at: context.date)))
+                        .font(.callout.monospacedDigit())
+                }
+                .frame(width: 118, alignment: .leading)
+            }
+            .help(recorder.state == .paused ? "Recording is paused" : "Recording")
+        }
     }
 }
