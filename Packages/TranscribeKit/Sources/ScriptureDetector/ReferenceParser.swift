@@ -184,7 +184,7 @@ public enum ReferenceParser {
     }
 
     /// The verse after (or before) a passage, crossing into the next or previous chapter.
-    static func step(_ reference: BibleReference, by delta: Int) -> BibleReference? {
+    public static func step(_ reference: BibleReference, by delta: Int) -> BibleReference? {
         guard let start = reference.verseStart else { return nil }
         let end = reference.verseEnd ?? start
         if delta > 0 {

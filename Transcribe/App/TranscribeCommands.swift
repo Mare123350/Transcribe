@@ -42,6 +42,32 @@ struct TranscribeCommands: Commands {
                 .disabled(model.selectedSession == nil)
         }
 
+        CommandMenu("Screen") {
+            Button("Send Preview to Screen") { model.output.take() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(model.output.preview == nil)
+            Button("Clear Screen") { model.output.clearScreen() }
+                .keyboardShortcut(.delete, modifiers: [.command, .shift])
+                .disabled(model.output.live == nil)
+            Divider()
+            Button("Next Slide") { Task { await model.output.step(slide: 1, onLive: true) } }
+                .keyboardShortcut("]", modifiers: .command)
+            Button("Previous Slide") { Task { await model.output.step(slide: -1, onLive: true) } }
+                .keyboardShortcut("[", modifiers: .command)
+            Button("Next Verse in Preview") { Task { await model.output.step(verse: 1, onLive: false) } }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+            Button("Previous Verse in Preview") { Task { await model.output.step(verse: -1, onLive: false) } }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+            Button("Skip Preview") { model.output.skipPreview() }
+                .disabled(model.output.preview == nil)
+            Divider()
+            Picker("Auto-Detect", selection: Binding(get: { model.output.mode }, set: { model.output.mode = $0 })) {
+                ForEach(OutputController.Mode.allCases) { Text($0.title).tag($0) }
+            }
+            Button("Open Output Window") { openWindow(id: WindowID.output) }
+                .keyboardShortcut("o", modifiers: [.command, .option])
+        }
+
         CommandGroup(after: .toolbar) {
             Button("Bigger Text") { fontSize = min(fontSize + 2, 40) }
                 .keyboardShortcut("+", modifiers: .command)

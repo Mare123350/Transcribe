@@ -7,6 +7,7 @@ enum SettingsTab {
     static let scripture = "scripture"
     static let translations = "translations"
     static let songs = "songs"
+    static let output = "output"
     static let headers = "headers"
 }
 

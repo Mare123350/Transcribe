@@ -10,6 +10,9 @@ struct InspectorView: View {
         let headers = layout.headers, songs = layout.songs, verses = layout.verses
 
         List {
+            Section("Screen") {
+                OutputPanel()
+            }
             Section("Sections") {
                 if headers.isEmpty { emptyRow("Headers appear as the service moves on.") }
                 ForEach(headers) { item in

@@ -52,6 +52,10 @@ public actor ScriptureDetector {
         translations.first { $0.info.abbreviation.caseInsensitiveCompare(abbreviation) == .orderedSame }
     }
 
+    public func verses(_ reference: BibleReference, abbreviation: String) -> [Verse] {
+        translation(abbreviation: abbreviation)?.verses(of: reference) ?? []
+    }
+
     public func passage(_ reference: BibleReference, abbreviation: String) -> String? {
         translation(abbreviation: abbreviation)?.text(of: reference)
     }

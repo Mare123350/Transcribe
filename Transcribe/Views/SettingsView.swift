@@ -13,6 +13,7 @@ struct SettingsView: View {
             Tab("General", systemImage: "gearshape", value: SettingsTab.general) { GeneralSettings() }
             Tab("Scripture", systemImage: "book", value: SettingsTab.scripture) { ScriptureSettings() }
             Tab("Translations", systemImage: "books.vertical", value: SettingsTab.translations) { TranslationsSettings().frame(minHeight: 520) }
+            Tab("Output", systemImage: "rectangle.on.rectangle", value: SettingsTab.output) { OutputSettings().frame(minHeight: 560) }
             Tab("Songs", systemImage: "music.note", value: SettingsTab.songs) { SongSettings() }
             Tab("Headers", systemImage: "list.bullet.indent", value: SettingsTab.headers) { HeaderSettings() }
         }

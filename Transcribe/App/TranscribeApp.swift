@@ -28,6 +28,14 @@ struct TranscribeApp: App {
         .modelContainer(container)
         .defaultSize(width: 1280, height: 720)
 
+        Window("Output", id: WindowID.output) {
+            OutputWindowView()
+                .environment(model)
+        }
+        .modelContainer(container)
+        .defaultSize(width: 960, height: 540)
+        .windowStyle(.hiddenTitleBar)
+
         Window("Song Library", id: WindowID.songLibrary) {
             SongLibraryView()
                 .environment(model)
@@ -45,7 +53,7 @@ struct TranscribeApp: App {
     private static func makeContainer() -> ModelContainer {
         let schema = Schema([Session.self, TranscriptItem.self, StoredSong.self])
         #if DEBUG
-        if CommandLine.arguments.contains("-PipelineSelfTest") || CommandLine.arguments.contains("-PerformanceSelfTest") {
+        if CommandLine.arguments.contains("-PipelineSelfTest") || CommandLine.arguments.contains("-PerformanceSelfTest") || CommandLine.arguments.contains("-OutputSelfTest") {
             return try! ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
         }
         #endif
@@ -63,4 +71,5 @@ enum WindowID {
     static let main = "main"
     static let presentation = "presentation"
     static let songLibrary = "song-library"
+    static let output = "output"
 }

@@ -19,6 +19,10 @@ enum SettingsKey {
     static let providerDeviceID = "bibleProviderDeviceID"
     static let settingsTab = "settingsTab"
     static let rewriteReferences = "rewriteReferencesInTranscript"
+    static let outputMode = "outputAutoDetectMode"
+    static let outputThreshold = "outputAutoSendThreshold"
+    static let outputTheme = "outputTheme"
+    static let outputDisplay = "outputDisplayName"
 }
 
 /// A permission the app needs but doesn't have, with guidance and a shortcut to System Settings.

@@ -15,6 +15,9 @@ final class SongService {
 
     /// Called when a song starts, so the section classifier can mark the start of worship.
     var onSongStarted: ((TranscriptItem, Session) -> Void)?
+    /// Called when a section of a library song is heard: the song, the section's index in the
+    /// song, and how sure the match is. Drives the lyrics on the output screen.
+    var onSectionSung: ((TranscriptItem, Int, Double) -> Void)?
 
     private let context: ModelContext
     private var matcher = SongMatcher(songs: [])
@@ -154,6 +157,7 @@ final class SongService {
 
         for line in sungLines { fold(line, under: song.id) }
         onSongStarted?(song, session)
+        onSectionSung?(song, match.sectionIndex, match.confidence)
     }
 
     private func appendSection(_ match: SongMatch) {
@@ -163,6 +167,7 @@ final class SongService {
         if item.lyricSections.last != section {
             item.lyricSections.append(section)
         }
+        onSectionSung?(item, match.sectionIndex, match.confidence)
     }
 
     private func endSong() {

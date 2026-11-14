@@ -23,6 +23,7 @@ final class AppModel {
     let scripture: ScriptureService
     let songs: SongService
     let sections: SectionService
+    let output: OutputController
 
     /// Finalized segments are analysed one at a time, in order. Songs and scripture are quick;
     /// section headers wait for the on-device language model (seconds), so they run in their own
@@ -39,6 +40,7 @@ final class AppModel {
         self.scripture = ScriptureService(context: container.mainContext)
         self.songs = SongService(context: container.mainContext)
         self.sections = SectionService(context: container.mainContext)
+        self.output = OutputController(context: container.mainContext, scripture: scripture)
         let (stream, continuation) = AsyncStream.makeStream(of: SegmentRef.self)
         self.segments = continuation
         let (sectionStream, sectionContinuation) = AsyncStream.makeStream(of: SegmentRef.self)
@@ -63,6 +65,10 @@ final class AppModel {
         recorder.onVolatile = { [weak self] text, session in self?.partialTextChanged(text, in: session) }
         songs.onSongStarted = { [weak self] song, session in self?.sections.songStarted(song, in: session) }
         scripture.onPassageRead = { [weak self] callout, session in self?.sections.passageRead(callout, in: session) }
+        scripture.onDetected = { [weak self] item, confidence in self?.output.detected(item, confidence: confidence) }
+        scripture.onCalloutChanged = { [weak self] item in self?.output.calloutChanged(item) }
+        scripture.onCalloutRemoved = { [weak self] id in self?.output.calloutRemoved(id) }
+        songs.onSectionSung = { [weak self] item, section, confidence in self?.output.sectionSung(item, section: section, confidence: confidence) }
         songs.load()
         Task { await scripture.load() }
         Task.detached(priority: .utility) {
@@ -73,6 +79,7 @@ final class AppModel {
         if PipelineSelfTest.isRequested { Task { await PipelineSelfTest.run(self) } }
         if LiveSelfTest.isRequested { Task { await LiveSelfTest.run(self) } }
         if PerformanceSelfTest.isRequested { Task { await PerformanceSelfTest.run(self) } }
+        if OutputSelfTest.isRequested { Task { await OutputSelfTest.run(self) } }
         #endif
     }
 
@@ -88,7 +95,7 @@ final class AppModel {
             await scripture.process(segment, in: session)
             #if DEBUG
             // The self-test checks the finished structure, so it classifies in step.
-            if PipelineSelfTest.isRequested { await sections.process(segment, in: session); return }
+            if PipelineSelfTest.isRequested || OutputSelfTest.isRequested { await sections.process(segment, in: session); return }
             #endif
             pendingSectionSegments += 1
             sectionSegments.yield(SegmentRef(item: segment, session: session))

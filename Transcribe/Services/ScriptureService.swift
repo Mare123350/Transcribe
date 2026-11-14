@@ -53,6 +53,17 @@ final class ScriptureService {
 
     static let listenWindow: TimeInterval = 60
 
+    /// A new verse card: the item and how sure the detection is (0…1). Drives auto-detect.
+    var onDetected: ((TranscriptItem, Double) -> Void)?
+    /// A card's reference, version, or text changed (detection settling or an operator fix).
+    var onCalloutChanged: ((TranscriptItem) -> Void)?
+    /// A card was dismissed or removed.
+    var onCalloutRemoved: ((UUID) -> Void)?
+
+    func verses(of reference: BibleReference, abbreviation: String) async -> [Verse] {
+        await detector.verses(reference, abbreviation: abbreviation)
+    }
+
     /// Called the first time a referenced passage is heard being read aloud.
     var onPassageRead: ((TranscriptItem, Session) -> Void)?
 
@@ -183,6 +194,7 @@ final class ScriptureService {
     /// Fills a callout's text: the requested version if it's installed or online, otherwise the
     /// default (then the fallback order), labelled "NIV requested, showing KJV".
     func show(_ item: TranscriptItem, reference: BibleReference, requested: String?) async {
+        defer { onCalloutChanged?(item) }
         let onlineNames = onlineVersions.map(\.abbreviation)
         let resolved = await detector.resolvedPassage(reference, requested: requested, defaultVersion: defaultAbbreviation, order: fallbackOrder, online: onlineNames)
         guard resolved.choice.source == .online else {
@@ -258,6 +270,7 @@ final class ScriptureService {
         known[item.id] = item
         provisional = (item.id, reference.key)
         await show(item, reference: reference, requested: named)
+        onDetected?(item, detection.confidence)
     }
 
     /// The card shown from in-progress text, moved to just after the segment that finished it.
@@ -361,6 +374,7 @@ final class ScriptureService {
         let sameSegmentTail = segment.text
         listening[item.id] = Listening(itemID: item.id, reference: reference, startedAt: segment.timestamp, verseWordCount: max(verseWords, 1), heard: sameSegmentTail, namedVersion: namedVersion)
         await rescore(item.id)
+        onDetected?(item, detection.confidence)
     }
 
     private func feedListeners(_ segment: TranscriptItem, namedVersionApplies: Bool) async {
@@ -458,6 +472,7 @@ final class ScriptureService {
             item.session = session
             recent.append((key, .now, item.id))
             recentWords.removeAll()
+            onDetected?(item, match.best.score)
         }
     }
 
@@ -485,6 +500,7 @@ final class ScriptureService {
         }
         TranscriptLayout.invalidate(item.session)
         recent.removeAll { $0.itemID == item.id }
+        onCalloutRemoved?(item.id)
         context.delete(item)
     }
 

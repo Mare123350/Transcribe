@@ -103,6 +103,7 @@ struct VerseCalloutView: View {
                 ProgressView().controlSize(.mini).help("Listening to identify the version")
             }
             Spacer()
+            SendToScreenButtons(source: .callout(item.id))
         }
     }
 
@@ -155,6 +156,9 @@ struct VerseCalloutView: View {
         if item.status != .confirmed {
             Button("Confirm") { item.status = .confirmed }
         }
+        Button("Send to Screen") { Task { await model.output.send(.callout(item.id)) } }
+        Button("Show in Preview") { Task { await model.output.showInPreview(.callout(item.id)) } }
+        Divider()
         Button("Insert Header Above") { model.insertHeader(.scriptureReading, before: item, in: session) }
         Divider()
         Button("Remove Verse", role: .destructive) { model.scripture.remove(item) }
@@ -224,5 +228,32 @@ struct InsertVerseSheet: View {
             await model.scripture.insertManual(parsed.reference, abbreviation: abbreviation, in: session, at: time)
             dismiss()
         }
+    }
+}
+
+/// "Preview" and "Send to Screen" on a card. Shows a red mark while the card is live.
+struct SendToScreenButtons: View {
+    let source: OutputSource
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let isLive = model.output.live?.source == source
+        HStack(spacing: 4) {
+            if isLive {
+                Label("Live", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+            }
+            Button { Task { await model.output.showInPreview(source) } } label: {
+                Image(systemName: "eye")
+            }
+            .help("Show in Preview")
+            Button { Task { await model.output.send(source) } } label: {
+                Image(systemName: "rectangle.on.rectangle.angled")
+            }
+            .help("Send to Screen")
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
     }
 }

@@ -27,6 +27,9 @@ struct SongBlockView: View {
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
+                    if let last = item.lyricSections.last {
+                        SendToScreenButtons(source: .song(item.id, section: model.output.songSectionIndex(item.id, matching: last)))
+                    }
                 }
 
                 ForEach(Array(item.lyricSections.enumerated()), id: \.offset) { _, section in
@@ -40,6 +43,11 @@ struct SongBlockView: View {
                         Text(section.lyrics)
                             .font(.system(size: fontSize))
                             .textSelection(.enabled)
+                    }
+                    .contextMenu {
+                        let index = model.output.songSectionIndex(item.id, matching: section)
+                        Button("Send “\(section.name.isEmpty ? "Section" : section.name)” to Screen") { Task { await model.output.send(.song(item.id, section: index)) } }
+                        Button("Show in Preview") { Task { await model.output.showInPreview(.song(item.id, section: index)) } }
                     }
                 }
                 if item.lyricSections.isEmpty {
