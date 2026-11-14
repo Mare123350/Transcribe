@@ -183,6 +183,28 @@ struct ReferenceParserTests {
         #expect(ReferenceParser.parseManual("ps 23")?.reference.description == "Psalm 23")
     }
 
+    @Test("Typed verse entry, with an optional version", arguments: [
+        ("jn 3 16", "John 3:16", nil),
+        ("jn 3 16 niv", "John 3:16", "NIV"),
+        ("ESV ps 23", "Psalm 23", "ESV"),
+        ("rom 8:28-30 (kjv)", "Romans 8:28-30", "KJV"),
+        ("1 cor 13 4-7 web", "1 Corinthians 13:4-7", "WEB"),
+        ("1jn 1 9", "1 John 1:9", nil),
+        ("ps 119 105", "Psalm 119:105", nil),
+        ("jude 3", "Jude 3", nil),
+    ] as [(String, String, String?)])
+    func entry(text: String, expected: String, version: String?) throws {
+        let result = try #require(ReferenceParser.parseEntry(text, versions: ["KJV", "WEB", "BSB", "NIV", "ESV"]))
+        #expect(result.reference.reference.description == expected)
+        #expect(result.version == version)
+    }
+
+    @Test("Typed text that isn't a reference")
+    func entryRejects() {
+        #expect(ReferenceParser.parseEntry("hello there", versions: ["KJV"]) == nil)
+        #expect(ReferenceParser.parseEntry("jn 30 1", versions: ["KJV"]) == nil)
+    }
+
     @Test("Reference keys and validity")
     func referenceBasics() {
         let ref = BibleReference(book: "JHN", chapter: 3, verseStart: 16)

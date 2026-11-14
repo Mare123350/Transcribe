@@ -60,6 +60,22 @@ final class ScriptureService {
     /// A card was dismissed or removed.
     var onCalloutRemoved: ((UUID) -> Void)?
 
+    /// Verses the operator looked up by hand, newest first.
+    private(set) var recentVerses: [RecentVerse] = {
+        UserDefaults.standard.data(forKey: SettingsKey.recentVerses).flatMap { try? JSONDecoder().decode([RecentVerse].self, from: $0) } ?? []
+    }()
+
+    func remember(_ reference: BibleReference, version: String) {
+        let entry = RecentVerse(reference: reference, version: version)
+        recentVerses = Array(([entry] + recentVerses.filter { $0 != entry }).prefix(20))
+        UserDefaults.standard.set(try? JSONEncoder().encode(recentVerses), forKey: SettingsKey.recentVerses)
+    }
+
+    func forget(_ entry: RecentVerse) {
+        recentVerses.removeAll { $0 == entry }
+        UserDefaults.standard.set(try? JSONEncoder().encode(recentVerses), forKey: SettingsKey.recentVerses)
+    }
+
     func verses(of reference: BibleReference, abbreviation: String) async -> [Verse] {
         await detector.verses(reference, abbreviation: abbreviation)
     }
@@ -541,4 +557,11 @@ final class ScriptureService {
         let words = text.split(separator: " ")
         return words.count <= maxWords ? text.trimmingCharacters(in: .whitespaces) : words.prefix(maxWords).joined(separator: " ") + "…"
     }
+}
+
+/// A verse looked up by hand, for the recent list.
+struct RecentVerse: Codable, Hashable, Identifiable {
+    let reference: BibleReference
+    let version: String
+    var id: String { "\(reference.key)|\(version)" }
 }

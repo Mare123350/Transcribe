@@ -35,6 +35,7 @@ enum OutputSelfTest {
                 while model.output.preview != nil { model.output.skipPreview() }
             }
             let session = model.newSession()
+            model.scripture.reset()
             var time: TimeInterval = 0
             for line in script {
                 let item = TranscriptItem(kind: .segment, sortIndex: session.nextSortIndex, timestamp: time)
@@ -110,6 +111,26 @@ enum OutputSelfTest {
         if case .song? = output.preview?.source { output.take() }
         render("5-song", output.live?.slide)
         lines.append("  live = \(describe(output.live))")
+
+        // 7. Typed by hand: "phil 4 13 web" to Preview, then live; "ps 23" into the transcript.
+        output.clearScreen()
+        while output.preview != nil { output.skipPreview() }
+        let versions = model.scripture.allVersionNames.map(\.abbreviation)
+        if let typed = ReferenceParser.parseEntry("phil 4 13 web", versions: versions) {
+            let version = typed.version ?? model.scripture.defaultAbbreviation
+            model.scripture.remember(typed.reference.reference, version: version)
+            await output.showInPreview(.passage(typed.reference.reference, version: version))
+            lines.append("TYPED 'phil 4 13 web': preview = \(describe(output.preview))")
+            output.take()
+            lines.append("  sent: live = \(describe(output.live))")
+            render("6-typed", output.live?.slide)
+        }
+        if let typed = ReferenceParser.parseEntry("ps 23", versions: versions), let session = model.selectedSession {
+            await model.scripture.insertManual(typed.reference.reference, abbreviation: model.scripture.defaultAbbreviation, in: session, at: 0)
+            let card = session.layout.verses.last
+            lines.append("TYPED 'ps 23' into the transcript: card = \(card?.reference ?? "none") \(card?.versionAbbreviation ?? ""), \(card?.verseText.split(separator: " ").count ?? 0) words")
+        }
+        lines.append("recent: \(model.scripture.recentVerses.prefix(3).map { "\($0.reference) \($0.version)" })")
 
         output.mode = .preview
         try? lines.joined(separator: "\n").write(to: folder.appending(path: "report.txt"), atomically: true, encoding: .utf8)

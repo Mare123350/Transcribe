@@ -23,6 +23,7 @@ enum SettingsKey {
     static let outputThreshold = "outputAutoSendThreshold"
     static let outputTheme = "outputTheme"
     static let outputDisplay = "outputDisplayName"
+    static let recentVerses = "recentVerses"
 }
 
 /// A permission the app needs but doesn't have, with guidance and a shortcut to System Settings.

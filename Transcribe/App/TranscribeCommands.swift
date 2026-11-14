@@ -43,6 +43,12 @@ struct TranscribeCommands: Commands {
         }
 
         CommandMenu("Screen") {
+            Button("Find Verse…") {
+                model.showInspector = true
+                model.verseEntryFocusRequest += 1
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            Divider()
             Button("Send Preview to Screen") { model.output.take() }
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(model.output.preview == nil)

@@ -88,6 +88,8 @@ final class OutputController {
 
     private let context: ModelContext
     private let scripture: ScriptureService
+    /// Bumped when a card changes, so slides built from its old contents are rebuilt.
+    private var revisions: [UUID: Int] = [:]
 
     init(context: ModelContext, scripture: ScriptureService) {
         self.context = context
@@ -227,6 +229,7 @@ final class OutputController {
 
     /// A card changed (version settled, reference corrected): refresh it wherever it shows.
     func calloutChanged(_ item: TranscriptItem) {
+        revisions[item.id, default: 0] += 1
         let source = OutputSource.callout(item.id)
         Task { await refresh(source) }
     }
@@ -266,7 +269,19 @@ final class OutputController {
 
     // MARK: Building slides
 
+    /// Builds the slides for `source`, again if its card changed while they were being built,
+    /// so a slow build can never put out-of-date text on screen.
     func makeCue(_ source: OutputSource) async -> OutputCue? {
+        guard case .callout(let id) = source else { return await buildCue(source) }
+        for _ in 0..<3 {
+            let revision = revisions[id] ?? 0
+            let cue = await buildCue(source)
+            if revisions[id] ?? 0 == revision { return cue }
+        }
+        return await buildCue(source)
+    }
+
+    private func buildCue(_ source: OutputSource) async -> OutputCue? {
         let slides: [OutputSlide]
         switch source {
         case .callout(let id):

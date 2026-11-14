@@ -11,6 +11,7 @@ struct InspectorView: View {
 
         List {
             Section("Screen") {
+                VerseEntryView()
                 OutputPanel()
             }
             Section("Sections") {

@@ -19,6 +19,8 @@ final class AppModel {
     var isInsertingHeader = false
     var isInsertingVerse = false
     var isExporting = false
+    /// Bumped by ⌘K to put the cursor in the verse entry field.
+    var verseEntryFocusRequest = 0
 
     let scripture: ScriptureService
     let songs: SongService

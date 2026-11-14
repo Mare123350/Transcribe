@@ -199,6 +199,23 @@ public enum ReferenceParser {
         return count > 0 ? BibleReference(book: reference.book, chapter: reference.chapter - 1, verseStart: count) : nil
     }
 
+    /// What the operator typed in the verse entry field: a reference, optionally with a version
+    /// before or after it ("jn 3 16 niv", "ESV ps 23", "rom 8:28 (kjv)"). `versions` are the
+    /// abbreviations the app can show.
+    public static func parseEntry(_ text: String, versions: [String]) -> (reference: DetectedReference, version: String?)? {
+        var words = text.split(whereSeparator: { $0.isWhitespace || $0 == "," }).map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "()[]")) }
+        var version: String?
+        for index in [words.count - 1, 0] where words.indices.contains(index) && words.count > 1 {
+            if let match = versions.first(where: { $0.caseInsensitiveCompare(words[index]) == .orderedSame }) {
+                version = match
+                words.remove(at: index)
+                break
+            }
+        }
+        guard let reference = parseManual(words.joined(separator: " ")) else { return nil }
+        return (reference, version)
+    }
+
     /// One reference typed by the operator: "1 cor 13:4-7", "first corinthians thirteen".
     public static func parseManual(_ text: String) -> DetectedReference? {
         parse(text, manual: true).first
