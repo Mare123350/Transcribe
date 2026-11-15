@@ -12,6 +12,8 @@ final class SongService {
     /// Detections waiting for the operator, newest last. Shown as a "Detected: …" chip.
     private(set) var pendingItemID: UUID?
     private(set) var librarySize = 0
+    /// For finding songs by title, lyric, author or number as the operator types.
+    private(set) var searchIndex = SongSearchIndex([])
 
     /// Called when a song starts, so the section classifier can mark the start of worship.
     var onSongStarted: ((TranscriptItem, Session) -> Void)?
@@ -60,6 +62,7 @@ final class SongService {
     func rebuild() {
         let songs = (try? context.fetch(FetchDescriptor<StoredSong>())) ?? []
         matcher = SongMatcher(songs: songs.map(\.record).filter { !$0.sections.isEmpty })
+        searchIndex = SongSearchIndex(songs.map { SongSearchEntry(record: $0.record, isFavorite: $0.isFavorite) })
         librarySize = songs.count
     }
 
@@ -67,10 +70,23 @@ final class SongService {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
         let records = try SongImporter.songs(from: url)
-        for record in records { context.insert(StoredSong(record: SongRecord(title: record.title, artist: record.artist, sections: record.sections))) }
+        // New ids, so importing the same file twice doesn't clash with songs already here.
+        for record in records {
+            context.insert(StoredSong(record: SongRecord(title: record.title, artist: record.artist, sections: record.sections,
+                                                         ccliNumber: record.ccliNumber, copyright: record.copyright, themes: record.themes)))
+        }
         try context.save()
         rebuild()
         return records.count
+    }
+
+    /// Songs matching what the operator typed, best first.
+    func search(_ query: String, limit: Int = 8) -> [(song: StoredSong, result: SongSearchResult)] {
+        searchIndex.search(query, limit: limit).compactMap { result in song(result.id).map { ($0, result) } }
+    }
+
+    func song(_ id: UUID) -> StoredSong? {
+        try? context.fetch(FetchDescriptor<StoredSong>(predicate: #Predicate { $0.id == id })).first
     }
 
     // MARK: Live

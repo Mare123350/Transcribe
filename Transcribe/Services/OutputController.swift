@@ -15,6 +15,32 @@ enum OutputSource: Equatable {
     case passage(BibleReference, version: String)
     /// A section of a song card (index into the song's full lyrics).
     case song(UUID, section: Int)
+    /// A song picked from the library by hand: every section as slides, starting at `section`.
+    case librarySong(UUID, section: Int)
+
+    /// Same item, ignoring which section a song starts at.
+    func matches(_ other: OutputSource) -> Bool {
+        switch (self, other) {
+        case (.librarySong(let a, _), .librarySong(let b, _)): a == b
+        default: self == other
+        }
+    }
+
+    /// Chosen by the operator rather than detected.
+    var isLibrarySong: Bool { if case .librarySong = self { true } else { false } }
+}
+
+/// Something the operator showed recently, for the Recent list.
+enum RecentItem: Codable, Hashable, Identifiable {
+    case verse(BibleReference, version: String)
+    case song(UUID, title: String)
+
+    var id: String {
+        switch self {
+        case .verse(let reference, let version): "v|\(reference.key)|\(version)"
+        case .song(let id, _): "s|\(id)"
+        }
+    }
 }
 
 /// One thing queued for, or showing on, the screen: its source and its slides.
@@ -39,6 +65,8 @@ struct OutputSlide: Equatable {
     var footnote: String = ""
     /// "2 / 3" when a passage is split.
     var pageNote: String = ""
+    /// For a song's slide list: which section this slide belongs to.
+    var sectionIndex: Int? = nil
 }
 
 /// Feeds the output screen: what's previewed, what's live, and detections waiting for the operator.
@@ -70,6 +98,11 @@ final class OutputController {
     private(set) var queue: [OutputCue] = []
     /// Follow the sung lyrics on screen; turned off when the operator moves a song by hand.
     var followSong = true
+    /// A song the operator chose by hand is on screen or in Preview: detections wait in the
+    /// queue and never replace it, until the operator clears the screen or resumes.
+    private(set) var manualHold = false
+    /// Songs and verses shown recently, newest first.
+    private(set) var recents: [RecentItem] = OutputController.loadRecents()
 
     var mode: Mode {
         get { Mode(rawValue: UserDefaults.standard.string(forKey: SettingsKey.outputMode) ?? "") ?? .preview }
@@ -104,6 +137,56 @@ final class OutputController {
         live = cue
         removeFromQueue(source)
         if case .song = source { followSong = true }
+        noteManual(source)
+    }
+
+    /// The operator chose this: a library song holds the screen; remember it for Recent.
+    private func noteManual(_ source: OutputSource) {
+        switch source {
+        case .librarySong(let id, _):
+            manualHold = true
+            if let song = storedSong(id) {
+                song.lastUsed = .now
+                remember(.song(id, title: song.title))
+            }
+        case .passage(let reference, let version):
+            remember(.verse(reference, version: version))
+        default: break
+        }
+    }
+
+    /// Lets detections reach Preview (and Auto-Send) again after a hand-picked song.
+    func resumeAuto() {
+        manualHold = false
+    }
+
+    /// Jumps to a slide of what's in Preview or Live (the slide list, or number keys).
+    func go(toSlide index: Int, onLive: Bool) {
+        guard var cue = onLive ? live : preview, cue.slides.indices.contains(index) else { return }
+        cue.page = index
+        if onLive { live = cue } else { preview = cue }
+        if case .librarySong = cue.source { followSong = false }
+    }
+
+    // MARK: Recent
+
+    private static func loadRecents() -> [RecentItem] {
+        if let data = UserDefaults.standard.data(forKey: SettingsKey.recentItems),
+           let items = try? JSONDecoder().decode([RecentItem].self, from: data) { return items }
+        // Carry over verses from the earlier verse-only list.
+        let old = UserDefaults.standard.data(forKey: SettingsKey.recentVerses).flatMap { try? JSONDecoder().decode([RecentVerse].self, from: $0) } ?? []
+        return old.filter { $0.reference.verseStart != nil }.map { .verse($0.reference, version: $0.version) }
+    }
+
+    func remember(_ item: RecentItem) {
+        if case .verse(let reference, _) = item, reference.verseStart == nil { return }
+        recents = Array(([item] + recents.filter { $0 != item }).prefix(20))
+        UserDefaults.standard.set(try? JSONEncoder().encode(recents), forKey: SettingsKey.recentItems)
+    }
+
+    func forget(_ item: RecentItem) {
+        recents.removeAll { $0 == item }
+        UserDefaults.standard.set(try? JSONEncoder().encode(recents), forKey: SettingsKey.recentItems)
     }
 
     func showInPreview(_ source: OutputSource) async {
@@ -121,6 +204,7 @@ final class OutputController {
         guard let cue = await makeCue(source) else { return }
         preview = cue
         queue.removeAll()
+        noteManual(source)
     }
 
     /// Preview goes live, and the next waiting detection moves into Preview.
@@ -137,6 +221,7 @@ final class OutputController {
 
     func clearScreen() {
         live = nil
+        manualHold = false
     }
 
     /// Next or previous slide of a split passage or song section; past the end, the next verse
@@ -167,6 +252,14 @@ final class OutputController {
             let count = songSections(id).count
             if (0..<count).contains(section + delta) { next = .song(id, section: section + delta) }
             followSong = false
+        case .librarySong:
+            // Every section is already a slide: move to the next section's first slide.
+            let current = cue.slide?.sectionIndex ?? 0
+            let target = current + delta
+            if let index = cue.slides.firstIndex(where: { $0.sectionIndex == target }) {
+                go(toSlide: index, onLive: onLive)
+            }
+            return
         }
         guard let next, var fresh = await makeCue(next) else { return }
         if delta < 0 { fresh.page = fresh.slides.count - 1 }
@@ -183,6 +276,11 @@ final class OutputController {
     func detected(_ item: TranscriptItem, confidence: Double) {
         let source = OutputSource.callout(item.id)
         Task {
+            // A hand-picked song is up: detections wait their turn.
+            if manualHold {
+                if mode != .off, let cue = await makeCue(source), !queue.contains(where: { $0.source == source }) { queue.append(cue) }
+                return
+            }
             switch mode {
             case .off:
                 return
@@ -203,6 +301,16 @@ final class OutputController {
                 if followSong && current != section { await send(source) }
                 return
             }
+            // The same song chosen from the library is on screen: follow along within it.
+            // (Detected section numbers index the same library lyrics as the slide list.)
+            if case .librarySong(let id, _)? = live?.source, id == item.songID, followSong, let live,
+               let index = live.slides.firstIndex(where: { $0.sectionIndex == section }), live.slide?.sectionIndex != section {
+                var moved = live
+                moved.page = index
+                self.live = moved
+                return
+            }
+            if manualHold { return }
             switch mode {
             case .off:
                 return
@@ -310,9 +418,27 @@ final class OutputController {
                 OutputSlide(kind: .lyric, text: text, heading: item.title, label: lyric.name,
                             pageNote: pages.count > 1 ? "\(index + 1) / \(pages.count)" : "")
             }
+        case .librarySong(let id, let section):
+            guard let song = storedSong(id) else { return nil }
+            var all: [OutputSlide] = []
+            for (index, part) in song.sections.enumerated() {
+                let pages = lyricPages(part.lyrics)
+                for (page, text) in pages.enumerated() {
+                    all.append(OutputSlide(kind: .lyric, text: text, heading: song.title, label: part.name,
+                                           footnote: theme.showSongCopyright ? song.copyrightLine : "",
+                                           pageNote: pages.count > 1 ? "\(page + 1) / \(pages.count)" : "", sectionIndex: index))
+                }
+            }
+            guard !all.isEmpty else { return nil }
+            let start = all.firstIndex { $0.sectionIndex == section } ?? 0
+            return OutputCue(source: source, slides: all, page: start)
         }
         guard !slides.isEmpty else { return nil }
         return OutputCue(source: source, slides: slides)
+    }
+
+    func storedSong(_ id: UUID) -> StoredSong? {
+        try? context.fetch(FetchDescriptor<StoredSong>(predicate: #Predicate { $0.id == id })).first
     }
 
     private func verseSlides(_ reference: BibleReference, version: String, fallbackText: String, label: String, footnote: String) async -> [OutputSlide] {
@@ -418,6 +544,8 @@ struct OutputTheme: Codable, Equatable {
     var versionPlacement = LabelPlacement.withReference
     var maxWordsPerSlide = 45
     var linesPerLyricSlide = 4
+    /// Show the song's copyright and CCLI number on lyric slides (often a licence requirement).
+    var showSongCopyright = true
     var showVerseNumbers = true
     var shadow = true
 

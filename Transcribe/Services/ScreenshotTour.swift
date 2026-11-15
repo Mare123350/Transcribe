@@ -49,6 +49,39 @@ enum ScreenshotTour {
         let screen = window.screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1512, height: 945)
         let sizes: [(String, NSSize)] = [("min", NSSize(width: 1000, height: 560)), ("laptop", NSSize(width: 1440, height: 900)), ("full", screen.size)]
 
+        // Songs: a planned set list, a song in Preview with its slide list, another live, and
+        // search results for a misspelled title; then the song library window.
+        if CommandLine.arguments.contains("-SongsStage") {
+            for title in ["Amazing Grace", "Be Thou My Vision", "Doxology"] {
+                if let song = model.songs.search(title, limit: 1).first?.song { model.addToSetList(.song(song.id), title: song.title) }
+            }
+            model.addToSetList(.verse(BibleReference(book: "JHN", chapter: 3, verseStart: 16), version: "KJV"), title: "John 3:16")
+            if let live = model.songs.search("Amazing Grace", limit: 1).first?.song { await model.output.send(.librarySong(live.id, section: 1)) }
+            if let next = model.songs.search("Be Thou My Vision", limit: 1).first?.song { await model.output.previewOnly(.librarySong(next.id, section: 0)) }
+            model.debugSearchText = "amazng"
+            for appearance in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {
+                NSApp.appearance = NSAppearance(named: appearance.1)
+                window.setFrame(NSRect(origin: screen.origin, size: NSSize(width: 1440, height: 900)), display: true)
+                try? await Task.sleep(for: .milliseconds(900))
+                await save(window, to: folder.appending(path: "\(label)-songs-\(appearance.0)-laptop.png"))
+            }
+            model.debugSearchText = ""
+            model.debugOpenLibrary += 1
+            try? await Task.sleep(for: .seconds(1.5))
+            if let library = NSApp.windows.first(where: { $0.title == "Song Library" }) {
+                library.setFrame(NSRect(origin: screen.origin, size: NSSize(width: 1100, height: 720)), display: true)
+                library.makeKeyAndOrderFront(nil)
+                for appearance in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {
+                    NSApp.appearance = NSAppearance(named: appearance.1)
+                    try? await Task.sleep(for: .milliseconds(900))
+                    await save(library, to: folder.appending(path: "\(label)-library-\(appearance.0).png"))
+                }
+                library.close()
+            }
+            try? "done".write(to: folder.appending(path: "shot.txt"), atomically: true, encoding: .utf8)
+            exit(0)
+        }
+
         for state in ["idle", "recording"] {
             if state == "recording" { model.recorder.debugSimulateRecording(in: session) }
             for appearance in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {

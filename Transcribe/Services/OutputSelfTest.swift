@@ -136,6 +136,46 @@ enum OutputSelfTest {
         }
         lines.append("recent: \(model.scripture.recentVerses.prefix(3).map { "\($0.reference) \($0.version)" })")
 
+        // 8. Songs picked by hand: slide list, jumps, holding the screen, set list stepping.
+        output.clearScreen()
+        while output.preview != nil { output.skipPreview() }
+        let found = model.songs.search("it is wel", limit: 3)
+        lines.append("SONG SEARCH 'it is wel': \(found.map(\.song.title))")
+        let byLyric = model.songs.search("chains are gone", limit: 1) + model.songs.search("when peace like a river", limit: 1)
+        lines.append("  by lyric: \(byLyric.map { "\($0.song.title) [\($0.result.matchedLine ?? "")]" })")
+        if let song = found.first?.song {
+            await output.previewOnly(.librarySong(song.id, section: 0))
+            let labels = output.preview.map { cue in cue.slides.enumerated().map { SlideStrip.label(for: $1, at: $0, in: cue) } } ?? []
+            lines.append("  preview slides: \(labels)")
+            output.go(toSlide: 2, onLive: false)
+            lines.append("  jump to slide 3: \(describe(output.preview))")
+            output.take()
+            lines.append("  sent; manual hold = \(output.manualHold)")
+            output.mode = .autoSend
+            let before = describe(output.live)
+            _ = await feed(["Please turn with me to Romans 8:28."], clear: false)
+            lines.append("  auto-send detection while held: live unchanged = \(describe(output.live) == before), waiting = \(output.queue.count)")
+            output.clearScreen()
+            lines.append("  after clearing the screen: manual hold = \(output.manualHold)")
+            output.mode = .preview
+        }
+        if let session = model.selectedSession {
+            session.setList = []
+            for title in ["Be Thou My Vision", "Doxology"] {
+                if let song = model.songs.search(title, limit: 1).first?.song { model.addToSetList(.song(song.id), title: song.title) }
+            }
+            model.addToSetList(.verse(BibleReference(book: "JHN", chapter: 3, verseStart: 16), version: "KJV"), title: "John 3:16")
+            var steps: [String] = []
+            for _ in 0..<3 {
+                model.stepSetList(by: 1)
+                try? await Task.sleep(for: .milliseconds(300))
+                steps.append(output.preview?.slide?.heading ?? "nothing")
+                output.take()
+            }
+            lines.append("SET LIST stepping: \(steps)")
+        }
+        lines.append("RECENT: \(output.recents.prefix(4).map(\.id))")
+
         output.mode = .preview
         try? lines.joined(separator: "\n").write(to: folder.appending(path: "report.txt"), atomically: true, encoding: .utf8)
         print("OUTPUTTEST_OUTPUT \(folder.path)")

@@ -67,6 +67,10 @@ struct TranscribeCommands: Commands {
                 .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
             Button("Previous Verse in Preview") { Task { await model.output.step(verse: -1, onLive: false) } }
                 .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+            Button("Next in Set List") { model.stepSetList(by: 1) }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+            Button("Previous in Set List") { model.stepSetList(by: -1) }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
             Button("Skip Preview") { model.output.skipPreview() }
                 .disabled(model.output.preview == nil)
             Divider()

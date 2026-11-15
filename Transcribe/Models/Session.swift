@@ -1,4 +1,5 @@
 import Foundation
+import ScriptureDetector
 import SwiftData
 
 /// One recorded service.
@@ -14,9 +15,16 @@ final class Session {
     var engineName: String = ""
     /// True while recording. Still true at launch means the app quit unexpectedly mid-service.
     var isRecording: Bool = false
+    /// Songs and verses planned for this service, in order (JSON of [SetListItem]).
+    var setListData: Data?
 
     @Relationship(deleteRule: .cascade, inverse: \TranscriptItem.session)
     var items: [TranscriptItem] = []
+
+    var setList: [SetListItem] {
+        get { setListData.flatMap { try? JSONDecoder().decode([SetListItem].self, from: $0) } ?? [] }
+        set { setListData = newValue.isEmpty ? nil : try? JSONEncoder().encode(newValue) }
+    }
 
     init(title: String, localeIdentifier: String) {
         self.title = title
@@ -194,4 +202,16 @@ final class LayoutRevisions {
 
     func revision(of session: Session) -> Int { values[ObjectIdentifier(session)] ?? 0 }
     func bump(_ session: Session) { values[ObjectIdentifier(session), default: 0] += 1 }
+}
+
+/// One planned item in a service's set list.
+struct SetListItem: Codable, Hashable, Identifiable {
+    enum Kind: Codable, Hashable {
+        case song(UUID)
+        case verse(BibleReference, version: String)
+    }
+    var id = UUID()
+    var kind: Kind
+    /// Shown in the list: the song title or the reference.
+    var title: String
 }

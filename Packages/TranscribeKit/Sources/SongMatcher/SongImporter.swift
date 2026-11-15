@@ -3,9 +3,11 @@ import Foundation
 public enum SongImportError: LocalizedError, Sendable {
     case unreadable
     case noSongs
+    case malformed(String)
 
     public var errorDescription: String? {
         switch self {
+        case .malformed(let detail): "The song file has a problem: \(detail)."
         case .unreadable: "The file couldn't be read as text."
         case .noSongs: "No songs were found in the file. See docs/SONG_FORMAT.md for the expected layout."
         }
@@ -21,15 +23,28 @@ public enum SongImportError: LocalizedError, Sendable {
 /// `[Verse 1]`, `Chorus:`, or `BRIDGE` start sections. Without headings, blank lines separate
 /// sections, and a block that repeats is treated as the chorus. Separate songs with a `---` line.
 public enum SongImporter {
+    /// Reads any supported format: JSON, plain text, ChordPro, OpenLyrics, or CCLI SongSelect.
     public static func songs(from url: URL) throws -> [SongRecord] {
         let data = try Data(contentsOf: url)
-        if url.pathExtension.lowercased() == "json" { return try songs(fromJSON: data) }
-        guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
+        guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16) ?? String(data: data, encoding: .isoLatin1) else {
             throw SongImportError.unreadable
         }
-        let songs = songs(fromText: text)
-        guard !songs.isEmpty else { throw SongImportError.noSongs }
-        return songs
+        let found: [SongRecord]
+        switch SongFileFormat.detect(extension: url.pathExtension, text: text) {
+        case .json: return try Self.songs(fromJSON: data)
+        case .openLyrics: return try Self.songs(fromOpenLyrics: data)
+        case .chordPro: found = Self.songs(fromChordPro: text)
+        case .songSelectUSR: found = Self.songs(fromUSR: text)
+        case .songSelectText: found = Self.song(fromSongSelectText: text).map { [$0] } ?? []
+        case .text: found = Self.songs(fromText: text)
+        }
+        guard !found.isEmpty else { throw SongImportError.noSongs }
+        return found
+    }
+
+    public static func format(of url: URL) -> SongFileFormat? {
+        guard let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else { return nil }
+        return SongFileFormat.detect(extension: url.pathExtension, text: text)
     }
 
     public static func songs(fromJSON data: Data) throws -> [SongRecord] {

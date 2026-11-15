@@ -176,7 +176,29 @@ struct OutputPanel: View {
                     .help("Open the output window on the chosen display (⌥⌘O)")
             }
 
+            if output.manualHold {
+                HStack(alignment: .center, spacing: Design.Space.s) {
+                    Image(systemName: "hand.raised.fill").foregroundStyle(Design.Palette.song)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Holding your song").font(.caption.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(output.queue.isEmpty ? "Detections will wait." : "\(output.queue.count) detection\(output.queue.count == 1 ? "" : "s") waiting")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .layoutPriority(1)
+                    Spacer(minLength: 0)
+                    Button("Resume Auto") { output.resumeAuto() }
+                        .controlSize(.small)
+                        .fixedSize()
+                        .help("Let detected verses and songs reach Preview again")
+                }
+                .padding(Design.Space.s)
+                .background(Design.Palette.song.opacity(0.1), in: RoundedRectangle(cornerRadius: Design.Radius.small))
+            }
+
             screen("Preview", cue: output.preview, live: false)
+            if let cue = output.preview, cue.slides.count > 1 { SlideStrip(cue: cue, onLive: false) }
             HStack {
                 Button { Task { await output.step(verse: -1, onLive: false) } } label: { Image(systemName: "chevron.left") }
                     .help("Previous verse or section")
@@ -195,6 +217,7 @@ struct OutputPanel: View {
             .controlSize(.small)
 
             screen("Live", cue: output.live, live: true)
+            if let cue = output.live, cue.slides.count > 1 { SlideStrip(cue: cue, onLive: true) }
             HStack {
                 Button { Task { await output.step(slide: -1, onLive: true) } } label: { Image(systemName: "chevron.left") }
                     .help("Previous slide (⌘[)")
@@ -233,5 +256,63 @@ struct OutputPanel: View {
                     }
                 }
         }
+    }
+}
+
+/// Every slide of what's in Preview or Live (V1, C, V2, B for a song; 1, 2, 3 for a long passage).
+/// Click one to jump to it; with the list focused, number keys 1–9 jump too.
+struct SlideStrip: View {
+    let cue: OutputCue
+    let onLive: Bool
+    @Environment(AppModel.self) private var model
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Design.Space.xs) {
+                    ForEach(Array(cue.slides.enumerated()), id: \.offset) { index, slide in
+                        let current = index == cue.page
+                        Button { model.output.go(toSlide: index, onLive: onLive) } label: {
+                            Text(Self.label(for: slide, at: index, in: cue))
+                                .font(.caption.weight(current ? .bold : .regular).monospacedDigit())
+                                .padding(.horizontal, Design.Space.s)
+                                .padding(.vertical, Design.Space.xxs)
+                                .background(current ? (onLive ? Design.Palette.live : Color.accentColor) : Color.secondary.opacity(0.15), in: Capsule())
+                                .foregroundStyle(current ? Color.white : Color.primary)
+                        }
+                        .buttonStyle(.plain)
+                        .id(index)
+                        .help("\(slide.label.isEmpty ? "Slide \(index + 1)" : slide.label)\(index < 9 ? " (\(index + 1))" : "")")
+                        .accessibilityLabel("Slide \(index + 1), \(slide.label)")
+                    }
+                }
+                .padding(Design.Space.xxs)
+            }
+            .onChange(of: cue.page) { withAnimation { proxy.scrollTo(cue.page, anchor: .center) } }
+        }
+        .focusable()
+        .focused($focused)
+        .overlay(RoundedRectangle(cornerRadius: Design.Radius.small).strokeBorder(focused ? Color.accentColor.opacity(0.6) : .clear))
+        .onKeyPress(characters: .decimalDigits) { press in
+            guard let number = Int(press.characters), number >= 1 else { return .ignored }
+            model.output.go(toSlide: number - 1, onLive: onLive)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) { model.output.go(toSlide: cue.page + 1, onLive: onLive); return .handled }
+        .onKeyPress(.leftArrow) { model.output.go(toSlide: cue.page - 1, onLive: onLive); return .handled }
+    }
+
+    /// "V1", "C", "B", "PC"; a second page of a section adds "·2"; passages are numbered.
+    static func label(for slide: OutputSlide, at index: Int, in cue: OutputCue) -> String {
+        guard slide.kind == .lyric else { return "\(index + 1)" }
+        let words = slide.label.split(separator: " ")
+        var short = words.filter { $0.first?.isLetter == true }.map { String($0.prefix(1)).uppercased() }.joined()
+        if slide.label.lowercased().hasPrefix("pre") { short = "PC" }
+        if let number = words.last.flatMap({ Int($0) }) { short += "\(number)" }
+        if short.isEmpty { short = "\(index + 1)" }
+        let samePart = cue.slides.indices.filter { cue.slides[$0].sectionIndex == slide.sectionIndex && cue.slides[$0].label == slide.label }
+        if samePart.count > 1, let position = samePart.firstIndex(of: index), position > 0 { short += "·\(position + 1)" }
+        return short
     }
 }

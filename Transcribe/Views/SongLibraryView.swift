@@ -3,71 +3,123 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Browse, edit, import, and export the songs Transcribe listens for.
+/// Browse, edit, import and export the songs Transcribe listens for and can put on screen.
 struct SongLibraryView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.modelContext) private var context
     @Query(sort: \StoredSong.title) private var songs: [StoredSong]
     @State private var selection: StoredSong?
     @State private var search = ""
+    @State private var filter = Filter.all
     @State private var importing = false
     @State private var exporting = false
     @State private var message: String?
 
+    enum Filter: Hashable {
+        case all, favorites, recent, theme(String)
+    }
+
+    private var themes: [String] {
+        Array(Set(songs.flatMap(\.themes))).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
     private var filtered: [StoredSong] {
-        guard !search.isEmpty else { return songs }
-        return songs.filter { $0.title.localizedCaseInsensitiveContains(search) || $0.artist.localizedCaseInsensitiveContains(search) }
+        var list: [StoredSong]
+        let query = search.trimmingCharacters(in: .whitespaces)
+        if query.isEmpty {
+            list = songs
+        } else {
+            // Ranked search: title, first line, any lyric line, author, CCLI number, typos allowed.
+            let ranked = model.songs.searchIndex.search(query, limit: 200).map(\.id)
+            let byID = Dictionary(songs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            list = ranked.compactMap { byID[$0] }
+        }
+        switch filter {
+        case .all: break
+        case .favorites: list = list.filter(\.isFavorite)
+        case .recent:
+            list = list.filter { $0.lastUsed != nil }
+            if query.isEmpty { list.sort { ($0.lastUsed ?? .distantPast) > ($1.lastUsed ?? .distantPast) } }
+        case .theme(let theme): list = list.filter { $0.themes.contains { $0.caseInsensitiveCompare(theme) == .orderedSame } }
+        }
+        return list
     }
 
     var body: some View {
         NavigationSplitView {
             List(filtered, selection: $selection) { song in
-                VStack(alignment: .leading) {
-                    Text(song.title.isEmpty ? "Untitled" : song.title)
-                    if !song.artist.isEmpty { Text(song.artist).font(.caption).foregroundStyle(.secondary) }
-                }
-                .tag(song)
-                .contextMenu {
-                    Button("Delete", role: .destructive) { delete(song) }
-                }
+                SongRow(song: song)
+                    .tag(song)
+                    .contextMenu {
+                        Button(song.isFavorite ? "Remove from Favourites" : "Add to Favourites") { song.isFavorite.toggle(); model.songs.rebuild() }
+                        Button("Show in Preview") { Task { await model.output.previewOnly(.librarySong(song.id, section: 0)) } }
+                        Button("Add to Set List") { model.addToSetList(.song(song.id), title: song.title) }
+                        Divider()
+                        Button("Delete", role: .destructive) { delete(song) }
+                    }
             }
-            .searchable(text: $search, placement: .sidebar)
-            .navigationSplitViewColumnWidth(min: 240, ideal: 280)
+            .searchable(text: $search, placement: .sidebar, prompt: "Title, lyric, author or CCLI #")
+            .navigationSplitViewColumnWidth(min: 260, ideal: 300)
+            .safeAreaInset(edge: .top) {
+                Picker("Show", selection: $filter) {
+                    Text("All Songs").tag(Filter.all)
+                    Text("Favourites").tag(Filter.favorites)
+                    Text("Recently Used").tag(Filter.recent)
+                    if !themes.isEmpty {
+                        Divider()
+                        ForEach(themes, id: \.self) { Text($0).tag(Filter.theme($0)) }
+                    }
+                }
+                .labelsHidden()
+                .padding(.horizontal, Design.Space.m)
+                .padding(.vertical, Design.Space.xs)
+            }
             // Always-visible buttons under the list (toolbar items in a narrow sidebar get hidden).
             .safeAreaInset(edge: .bottom) {
-                HStack(spacing: 8) {
+                HStack(spacing: Design.Space.s) {
                     Button { add() } label: { Label("New Song", systemImage: "plus") }
+                        .fixedSize()
                         .help("Add a song by typing its lyrics")
                     Button { importing = true } label: { Label("Import…", systemImage: "square.and.arrow.down") }
-                        .help("Import songs from JSON or plain text")
-                    Spacer()
+                        .fixedSize()
+                        .help("Import plain text, ChordPro, OpenLyrics, CCLI SongSelect or JSON files")
+                    Spacer(minLength: 0)
                     Button { exporting = true } label: { Image(systemName: "square.and.arrow.up") }
                         .help("Export the library as JSON")
                         .disabled(songs.isEmpty)
                 }
                 .controlSize(.regular)
-                .padding(10)
+                .padding(Design.Space.m)
                 .background(.bar)
             }
         } detail: {
             if let selection {
                 SongEditor(song: selection)
                     .id(selection.id)
+            } else if songs.isEmpty {
+                ContentUnavailableView {
+                    Label("No Songs Yet", systemImage: "music.note.list")
+                } description: {
+                    Text("Import your library from SongSelect, ChordPro, OpenLyrics or plain text. Modern worship songs are copyrighted: use them under your church's CCLI or similar licence.")
+                } actions: {
+                    Button { importing = true } label: { Label("Import Songs…", systemImage: "square.and.arrow.down") }
+                        .buttonStyle(.borderedProminent)
+                    Button { add() } label: { Label("New Song", systemImage: "plus") }
+                }
             } else {
                 ContentUnavailableView {
                     Label("\(songs.count) Songs", systemImage: "music.note.list")
                 } description: {
-                    Text("Transcribe recognizes these songs while they're sung and shows the clean lyrics. Modern worship songs are copyrighted: import them under your church's CCLI or similar licence.")
+                    Text("Choose a song to edit it, show it on screen, or add it to this service's set list. Transcribe also recognizes these songs while they're sung.")
                 } actions: {
                     Button { add() } label: { Label("New Song", systemImage: "plus") }
-                        .buttonStyle(.borderedProminent)
                     Button { importing = true } label: { Label("Import Songs…", systemImage: "square.and.arrow.down") }
                 }
             }
         }
         .navigationTitle("Song Library")
         .onDisappear { model.songs.rebuild() }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.json, .plainText], allowsMultipleSelection: true) { result in
+        .fileImporter(isPresented: $importing, allowedContentTypes: Self.importTypes, allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             var total = 0
             var errors: [String] = []
@@ -85,6 +137,9 @@ struct SongLibraryView: View {
         }
     }
 
+    static let importTypes: [UTType] = [.json, .plainText, .xml, .text]
+        + ["cho", "chordpro", "chopro", "crd", "pro", "usr"].compactMap { UTType(filenameExtension: $0) }
+
     private func add() {
         let song = StoredSong(record: SongRecord(title: "New Song", sections: [SongSection(name: "Verse 1", lyrics: "")]))
         context.insert(song)
@@ -99,6 +154,35 @@ struct SongLibraryView: View {
     }
 }
 
+private struct SongRow: View {
+    @Bindable var song: StoredSong
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Design.Space.s) {
+            Button {
+                song.isFavorite.toggle()
+                model.songs.rebuild()
+            } label: {
+                Image(systemName: song.isFavorite ? "star.fill" : "star")
+                    .foregroundStyle(song.isFavorite ? Color.yellow : Color.secondary.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+            .help(song.isFavorite ? "Remove from favourites" : "Add to favourites")
+            .accessibilityLabel(song.isFavorite ? "Favourite" : "Not a favourite")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.title.isEmpty ? "Untitled" : song.title).lineLimit(1)
+                let detail = [song.artist, song.ccliNumber.isEmpty ? "" : "CCLI \(song.ccliNumber)"].filter { !$0.isEmpty }.joined(separator: " · ")
+                if !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                if !song.themes.isEmpty {
+                    Text(song.themes.joined(separator: " · ")).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 private struct SongEditor: View {
     @Bindable var song: StoredSong
     @Environment(AppModel.self) private var model
@@ -107,8 +191,28 @@ private struct SongEditor: View {
     var body: some View {
         Form {
             Section {
+                HStack(spacing: Design.Space.s) {
+                    Button { Task { await model.output.previewOnly(.librarySong(song.id, section: 0)) } } label: {
+                        Label("Show in Preview", systemImage: "eye")
+                    }
+                    Button { Task { await model.output.send(.librarySong(song.id, section: 0)) } } label: {
+                        Label("Send to Screen", systemImage: "rectangle.on.rectangle.angled")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button { model.addToSetList(.song(song.id), title: song.title) } label: {
+                        Label("Add to Set List", systemImage: "text.badge.plus")
+                    }
+                    Spacer()
+                    Toggle(isOn: $song.isFavorite) { Label("Favourite", systemImage: "star") }
+                        .toggleStyle(.button)
+                }
+            }
+            Section("Details") {
                 TextField("Title", text: $song.title)
-                TextField("Artist / Author", text: $song.artist)
+                TextField("Author", text: $song.artist)
+                TextField("CCLI song number", text: $song.ccliNumber)
+                TextField("Copyright", text: $song.copyright)
+                TextField("Themes", text: $song.themesRaw, prompt: Text("Grace, Easter, Communion"))
             }
             ForEach(sections.indices, id: \.self) { index in
                 Section {
@@ -120,9 +224,14 @@ private struct SongEditor: View {
                     HStack {
                         Text(sections[index].name.isEmpty ? "Section \(index + 1)" : sections[index].name)
                         Spacer()
+                        Button { Task { await model.output.previewOnly(.librarySong(song.id, section: index)) } } label: { Image(systemName: "eye") }
+                            .help("Show this section in Preview")
                         Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }.disabled(index == 0)
+                            .help("Move up")
                         Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }.disabled(index == sections.count - 1)
+                            .help("Move down")
                         Button(role: .destructive) { sections.remove(at: index) } label: { Image(systemName: "trash") }
+                            .help("Delete section")
                     }
                     .buttonStyle(.borderless)
                 }

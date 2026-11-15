@@ -52,6 +52,9 @@ struct ContentView: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.windowWidth = $0 }
         .sheet(isPresented: $model.isChoosingInput) { InputChooserSheet() }
         #if DEBUG
+        .modifier(DebugLibraryOpener())
+        #endif
+        #if DEBUG
         .onAppear { LaunchTiming.windowAppeared(model) }
         #endif
         .sheet(isPresented: $model.isExporting) {
@@ -84,3 +87,14 @@ struct ContentView: View {
         }
     }
 }
+
+#if DEBUG
+/// Lets the screenshot tour open the song library window.
+private struct DebugLibraryOpener: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
+    func body(content: Content) -> some View {
+        content.onChange(of: model.debugOpenLibrary) { openWindow(id: WindowID.songLibrary) }
+    }
+}
+#endif

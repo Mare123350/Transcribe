@@ -6,7 +6,7 @@ set -u
 APP=$1; LABEL=$2; OUT=$3
 TMP=~/Library/Containers/app.transcribe.Transcribe/Data/tmp/screenshots
 mkdir -p "$OUT"; rm -rf "$TMP"; mkdir -p "$TMP"
-"$APP/Contents/MacOS/Transcribe" -UIScreenshots "$LABEL" >/dev/null 2>&1 &
+"$APP/Contents/MacOS/Transcribe" -UIScreenshots "$LABEL" ${EXTRA:-} >/dev/null 2>&1 &
 PID=$!
 last=""
 while kill -0 $PID 2>/dev/null; do

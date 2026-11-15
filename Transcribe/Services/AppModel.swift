@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import ScriptureDetector
 import SwiftData
 import Transcriber
 
@@ -24,6 +25,11 @@ final class AppModel {
     /// The transcript column's width: what the toolbar actually has to fit into.
     var detailWidth: CGFloat = 900
     var isChoosingInput = false
+    #if DEBUG
+    /// Screenshot tour: text to put in the Screen search field, and a request to open the library.
+    var debugSearchText = ""
+    var debugOpenLibrary = 0
+    #endif
     /// Bumped by ⌘K to put the cursor in the verse entry field.
     var verseEntryFocusRequest = 0
 
@@ -187,6 +193,58 @@ final class AppModel {
         songs.reset()
         scripture.reset()
         sections.reset()
+    }
+
+    // MARK: - Set list and hand-picked items
+
+    /// Adds a verse card to the selected service at the current point.
+    func insertVerse(_ reference: BibleReference, version: String) {
+        guard let session = selectedSession else { return }
+        let time = recorder.session === session ? recorder.currentTime : session.duration
+        Task { await scripture.insertManual(reference, abbreviation: version, in: session, at: time) }
+    }
+
+    /// Adds a song or verse to the selected service's set list (making a service if there's none).
+    func addToSetList(_ kind: SetListItem.Kind, title: String) {
+        let session = selectedSession ?? newSession()
+        session.setList.append(SetListItem(kind: kind, title: title))
+        try? context.save()
+    }
+
+    func removeFromSetList(_ item: SetListItem) {
+        guard let session = selectedSession else { return }
+        session.setList.removeAll { $0.id == item.id }
+    }
+
+    func moveSetList(from offsets: IndexSet, to destination: Int) {
+        guard let session = selectedSession else { return }
+        var list = session.setList
+        list.move(fromOffsets: offsets, toOffset: destination)
+        session.setList = list
+    }
+
+    func source(for item: SetListItem) -> OutputSource {
+        switch item.kind {
+        case .song(let id): .librarySong(id, section: 0)
+        case .verse(let reference, let version): .passage(reference, version: version)
+        }
+    }
+
+    /// The set list item now on screen (or in Preview), if any.
+    var currentSetListIndex: Int? {
+        guard let list = selectedSession?.setList else { return nil }
+        for cue in [output.live, output.preview].compactMap({ $0 }) {
+            if let index = list.firstIndex(where: { source(for: $0) .matches(cue.source) }) { return index }
+        }
+        return nil
+    }
+
+    /// ⌥⌘↓ / ⌥⌘↑: puts the next (or previous) set list item in Preview.
+    func stepSetList(by delta: Int) {
+        guard let list = selectedSession?.setList, !list.isEmpty else { return }
+        let target = currentSetListIndex.map { $0 + delta } ?? (delta > 0 ? 0 : list.count - 1)
+        guard list.indices.contains(target) else { return }
+        Task { await output.previewOnly(source(for: list[target])) }
     }
 
     // MARK: - Headers
