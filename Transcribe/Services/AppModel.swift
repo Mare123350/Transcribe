@@ -19,6 +19,11 @@ final class AppModel {
     var isInsertingHeader = false
     var isInsertingVerse = false
     var isExporting = false
+    /// The main window's width, so the toolbar can switch to icons when it's narrow.
+    var windowWidth: CGFloat = 1440
+    /// The transcript column's width: what the toolbar actually has to fit into.
+    var detailWidth: CGFloat = 900
+    var isChoosingInput = false
     /// Bumped by ⌘K to put the cursor in the verse entry field.
     var verseEntryFocusRequest = 0
 

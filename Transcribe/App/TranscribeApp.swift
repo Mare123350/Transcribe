@@ -16,7 +16,7 @@ struct TranscribeApp: App {
         Window("Transcribe", id: WindowID.main) {
             ContentView()
                 .environment(model)
-                .frame(minWidth: 900, minHeight: 560)
+                .frame(minWidth: 1000, minHeight: 560)
         }
         .modelContainer(container)
         .commands { TranscribeCommands(model: model) }

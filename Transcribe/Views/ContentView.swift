@@ -9,11 +9,12 @@ struct ContentView: View {
         @Bindable var model = model
         NavigationSplitView {
             SessionListView()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 340)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 340)
         } detail: {
             if let session = model.selectedSession {
                 TranscriptView(session: session)
                     .id(session.id)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.detailWidth = $0 }
             } else {
                 ContentUnavailableView {
                     Label("No Session Selected", systemImage: "waveform")
@@ -33,9 +34,23 @@ struct ContentView: View {
                     ContentUnavailableView("Nothing to Show", systemImage: "sidebar.right")
                 }
             }
-            .inspectorColumnWidth(min: 240, ideal: 280, max: 400)
+            .inspectorColumnWidth(min: 260, ideal: 300, max: 520)
+            // The inspector's own button lives in the inspector's part of the toolbar, so the
+            // main buttons never sit across its edge.
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { model.showInspector.toggle() } label: {
+                        Label("Inspector", systemImage: "sidebar.right")
+                    }
+                    .help("Show or hide the inspector (⌥⌘I)")
+                }
+            }
         }
         .toolbar { RecordingToolbar() }
+        // The service title is already shown large above the transcript.
+        .toolbar(removing: .title)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.windowWidth = $0 }
+        .sheet(isPresented: $model.isChoosingInput) { InputChooserSheet() }
         #if DEBUG
         .onAppear { LaunchTiming.windowAppeared(model) }
         #endif

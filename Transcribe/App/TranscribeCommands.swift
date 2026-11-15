@@ -28,6 +28,9 @@ struct TranscribeCommands: Commands {
         CommandMenu("Recording") {
             Button(recordTitle) { Task { await model.toggleRecording() } }
                 .keyboardShortcut("r", modifiers: .command)
+            Button("Choose Audio Input…") { model.isChoosingInput = true }
+                .keyboardShortcut("m", modifiers: [.command, .option])
+                .disabled(model.recorder.isActive)
             Button("Continue Recording This Session") { Task { await model.continueRecording() } }
                 .disabled(model.recorder.isActive || model.selectedSession == nil)
             Button("Stop") { Task { await model.stopRecording() } }

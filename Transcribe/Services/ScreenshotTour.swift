@@ -35,9 +35,19 @@ enum ScreenshotTour {
         model.showInspector = true
         try? await Task.sleep(for: .seconds(1))
 
-        guard let window = mainWindow() else { print("no window"); exit(1) }
+        var found = mainWindow()
+        for _ in 0..<50 where found == nil {
+            try? await Task.sleep(for: .milliseconds(200))
+            found = mainWindow()
+        }
+        guard let window = found else {
+            print("no window: \(NSApp.windows.map { "\($0.title) visible=\($0.isVisible) mask=\($0.styleMask.rawValue)" })")
+            exit(1)
+        }
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
         let screen = window.screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1512, height: 945)
-        let sizes: [(String, NSSize)] = [("min", NSSize(width: 900, height: 560)), ("laptop", NSSize(width: 1440, height: 900)), ("full", screen.size)]
+        let sizes: [(String, NSSize)] = [("min", NSSize(width: 1000, height: 560)), ("laptop", NSSize(width: 1440, height: 900)), ("full", screen.size)]
 
         for state in ["idle", "recording"] {
             if state == "recording" { model.recorder.debugSimulateRecording(in: session) }
@@ -57,7 +67,7 @@ enum ScreenshotTour {
     }
 
     static func mainWindow() -> NSWindow? {
-        NSApp.windows.filter { $0.isVisible && $0.styleMask.contains(.titled) && $0.title != "Output" }
+        NSApp.windows.filter { $0.styleMask.contains(.titled) && $0.title != "Output" && $0.contentView != nil }
             .max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
     }
 
