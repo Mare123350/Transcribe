@@ -123,9 +123,10 @@ public final class SongSearchIndex: Sendable {
         if allowPrefix && word.count >= 2 && candidate.hasPrefix(word) { return 0.9 }
         guard word.count >= 4 else { return 0 }
         let limit = word.count >= 7 ? 2 : 1
-        if Similarity.levenshtein(word, candidate, limit: limit) <= limit { return 0.75 }
+        // Lengths too far apart can't be a typo of each other: skip the edit distance.
+        if abs(word.count - candidate.count) <= limit, Similarity.levenshtein(word, candidate, limit: limit) <= limit { return 0.75 }
         // A typo in an unfinished word: compare with the same-length start of the candidate.
-        if allowPrefix && candidate.count > word.count,
+        if allowPrefix && candidate.count > word.count, candidate.first == word.first,
            Similarity.levenshtein(word, String(candidate.prefix(word.count)), limit: 1) <= 1 { return 0.65 }
         return 0
     }

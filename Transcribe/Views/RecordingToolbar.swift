@@ -128,7 +128,9 @@ private struct RecordingStatus: View {
 
     var body: some View {
         let recorder = model.recorder
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        // Ticks only while there's a running time to show; idle, the toolbar stays still.
+        let ticking = recorder.state == .recording || recorder.state == .paused
+        TimelineView(.periodic(from: .now, by: ticking ? 1 : 3600)) { context in
             HStack(spacing: Design.Space.xs) {
                 switch recorder.state {
                 case .recording:

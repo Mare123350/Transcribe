@@ -82,6 +82,26 @@ enum ScreenshotTour {
             exit(0)
         }
 
+        // Profiling: stay open with the demo service, sit idle for 8 s, then type into the
+        // search field the way an operator would (a key every 150 ms), then idle again.
+        if CommandLine.arguments.contains("-ProfileStage") {
+            print("PROFILE_READY")
+            try? await Task.sleep(for: .seconds(8))
+            print("PROFILE_TYPING")
+            let phrase = "amazing grace"
+            for count in 1...phrase.count {
+                model.debugSearchText = String(phrase.prefix(count))
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+            for query in ["jn 3 16", "how great", "be thou", ""] {
+                model.debugSearchText = query
+                try? await Task.sleep(for: .milliseconds(400))
+            }
+            print("PROFILE_IDLE")
+            try? await Task.sleep(for: .seconds(8))
+            exit(0)
+        }
+
         // Screen panel: empty Preview and Live, Auto-Send on (the warning state).
         if CommandLine.arguments.contains("-ScreenStage") {
             let previousMode = model.output.mode

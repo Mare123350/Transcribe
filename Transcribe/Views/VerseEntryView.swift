@@ -12,6 +12,8 @@ struct VerseEntryView: View {
     @State private var chosenVersion = ""
     @State private var verseText = ""
     @State private var selection = 0
+    /// Song results for the current text, worked out once per pause in typing (not per redraw).
+    @State private var songMatches: [(song: StoredSong, result: SongSearchResult)] = []
     @FocusState private var focused: Bool
 
     private var versions: [String] { model.scripture.allVersionNames.map(\.abbreviation) }
@@ -24,11 +26,7 @@ struct VerseEntryView: View {
     private var version: String {
         parsed?.version ?? (chosenVersion.isEmpty ? model.scripture.defaultAbbreviation : chosenVersion)
     }
-    private var songs: [(song: StoredSong, result: SongSearchResult)] {
-        let query = text.trimmingCharacters(in: .whitespaces)
-        guard query.count >= 2 else { return [] }
-        return model.songs.search(query, limit: 6)
-    }
+    private var songs: [(song: StoredSong, result: SongSearchResult)] { songMatches }
 
     /// Results in the order shown: the verse (if any) then songs.
     private enum Result { case verse(BibleReference), song(StoredSong) }
@@ -44,6 +42,14 @@ struct VerseEntryView: View {
             } else {
                 RecentList()
             }
+        }
+        .task(id: text) {
+            let query = text.trimmingCharacters(in: .whitespaces)
+            guard query.count >= 2 else { songMatches = []; return }
+            // Wait for a pause in typing, so fast typists don't search on every key.
+            try? await Task.sleep(for: .milliseconds(90))
+            guard !Task.isCancelled else { return }
+            songMatches = model.songs.search(query, limit: 6)
         }
         .task(id: "\(text)|\(version)") {
             selection = 0

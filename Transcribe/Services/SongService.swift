@@ -14,6 +14,8 @@ final class SongService {
     private(set) var librarySize = 0
     /// For finding songs by title, lyric, author or number as the operator types.
     private(set) var searchIndex = SongSearchIndex([])
+    /// The library by id, so results and Recent don't fetch from the store on every redraw.
+    @ObservationIgnored private var songsByID: [UUID: StoredSong] = [:]
 
     /// Called when a song starts, so the section classifier can mark the start of worship.
     var onSongStarted: ((TranscriptItem, Session) -> Void)?
@@ -63,6 +65,7 @@ final class SongService {
         let songs = (try? context.fetch(FetchDescriptor<StoredSong>())) ?? []
         matcher = SongMatcher(songs: songs.map(\.record).filter { !$0.sections.isEmpty })
         searchIndex = SongSearchIndex(songs.map { SongSearchEntry(record: $0.record, isFavorite: $0.isFavorite) })
+        songsByID = Dictionary(songs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         librarySize = songs.count
     }
 
@@ -86,7 +89,8 @@ final class SongService {
     }
 
     func song(_ id: UUID) -> StoredSong? {
-        try? context.fetch(FetchDescriptor<StoredSong>(predicate: #Predicate { $0.id == id })).first
+        if let cached = songsByID[id] { return cached.isDeleted ? nil : cached }
+        return try? context.fetch(FetchDescriptor<StoredSong>(predicate: #Predicate { $0.id == id })).first
     }
 
     // MARK: Live

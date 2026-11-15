@@ -9,6 +9,16 @@ struct OutputSlideView: View {
 
     static let canvas = CGSize(width: 1920, height: 1080)
 
+    /// Background images, loaded once instead of on every redraw of every slide.
+    @MainActor private static var imageCache: [String: NSImage] = [:]
+
+    @MainActor static func backgroundImage(named name: String) -> NSImage? {
+        if let cached = imageCache[name] { return cached }
+        let image = NSImage(contentsOf: OutputTheme.backgroundsDirectory.appending(path: name))
+        if let image { imageCache[name] = image }
+        return image
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let scale = min(proxy.size.width / Self.canvas.width, proxy.size.height / Self.canvas.height)
@@ -45,7 +55,7 @@ struct OutputSlideView: View {
 
     @ViewBuilder private var background: some View {
         Color(hex: theme.backgroundColor)
-        if !theme.backgroundImage.isEmpty, let image = NSImage(contentsOf: OutputTheme.backgroundsDirectory.appending(path: theme.backgroundImage)) {
+        if !theme.backgroundImage.isEmpty, let image = Self.backgroundImage(named: theme.backgroundImage) {
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
