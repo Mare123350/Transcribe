@@ -80,6 +80,8 @@ struct InspectorView: View {
             }
         }
         .listStyle(.sidebar)
+        // Hints and labels here wrap instead of being cut off.
+        .lineLimit(nil)
     }
 
     private func jumpRow<Content: View>(_ item: TranscriptItem, @ViewBuilder content: () -> Content) -> some View {
@@ -116,6 +118,7 @@ private struct SetListSection: View {
         if list.isEmpty {
             Text("Plan this service: find a song or verse above, then press ⌥↩ or right-click it and choose Add to Set List.")
                 .font(.caption).foregroundStyle(.secondary)
+                .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             let current = model.currentSetListIndex

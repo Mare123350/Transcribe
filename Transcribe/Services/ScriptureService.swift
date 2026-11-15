@@ -84,6 +84,7 @@ final class ScriptureService {
         guard reference.verseStart != nil else { return }
         let entry = RecentVerse(reference: reference, version: version)
         recentVerses = Array(([entry] + recentVerses.filter { $0 != entry }).prefix(20))
+        guard !isSelfTestRun else { return }
         UserDefaults.standard.set(try? JSONEncoder().encode(recentVerses), forKey: SettingsKey.recentVerses)
     }
 

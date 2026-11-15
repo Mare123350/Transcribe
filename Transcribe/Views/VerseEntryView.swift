@@ -91,10 +91,12 @@ struct VerseEntryView: View {
         if let parsed, exact == nil, songs.isEmpty {
             Text("Add a verse number, e.g. “\(parsed.reference.reference.description) 1”.")
                 .font(.caption).foregroundStyle(.secondary)
+                .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
         } else if results.isEmpty {
             Text("No verse or song matches “\(text)”. Try a reference like jn 3 16, or a title or lyric line.")
                 .font(.caption).foregroundStyle(.secondary)
+                .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: Design.Space.xxs) {
@@ -203,10 +205,15 @@ private struct RecentList: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let recents = Array(model.output.recents.prefix(8))
+        // Songs since removed from the library are left out.
+        let recents = Array(model.output.recents.filter { item in
+            if case .song(let id, _) = item { return model.songs.song(id) != nil }
+            return true
+        }.prefix(8))
         if recents.isEmpty {
             Text("Verses and songs you show appear here for quick reuse.")
                 .font(.caption).foregroundStyle(.secondary)
+                .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: Design.Space.xxs) {

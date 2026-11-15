@@ -28,6 +28,9 @@ enum Design {
         static let good = Color.green
     }
 
+    /// How a slide moves from Preview to Live.
+    static let slideAnimation = Animation.snappy(duration: 0.28)
+
     /// Toolbar density for the transcript column's width, so nothing truncates or overflows.
     enum ToolbarDensity {
         case full, medium, narrow

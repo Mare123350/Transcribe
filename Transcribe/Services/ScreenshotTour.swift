@@ -82,6 +82,23 @@ enum ScreenshotTour {
             exit(0)
         }
 
+        // Screen panel: empty Preview and Live, Auto-Send on (the warning state).
+        if CommandLine.arguments.contains("-ScreenStage") {
+            let previousMode = model.output.mode
+            model.output.clearScreen()
+            while model.output.preview != nil { model.output.skipPreview() }
+            model.output.mode = .autoSend
+            for appearance in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {
+                NSApp.appearance = NSAppearance(named: appearance.1)
+                window.setFrame(NSRect(origin: screen.origin, size: NSSize(width: 1440, height: 900)), display: true)
+                try? await Task.sleep(for: .milliseconds(900))
+                await save(window, to: folder.appending(path: "\(label)-empty-\(appearance.0)-laptop.png"))
+            }
+            model.output.mode = previousMode
+            try? "done".write(to: folder.appending(path: "shot.txt"), atomically: true, encoding: .utf8)
+            exit(0)
+        }
+
         for state in ["idle", "recording"] {
             if state == "recording" { model.recorder.debugSimulateRecording(in: session) }
             for appearance in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {

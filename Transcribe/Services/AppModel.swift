@@ -1,7 +1,9 @@
+import AppKit
 import Foundation
 import Observation
 import ScriptureDetector
 import SwiftData
+import SwiftUI
 import Transcriber
 
 /// App-wide state shared by the main window, menus, presentation window, and settings.
@@ -30,6 +32,38 @@ final class AppModel {
     var debugSearchText = ""
     var debugOpenLibrary = 0
     #endif
+    /// The main window, so screen keys only act there.
+    weak var mainWindow: NSWindow?
+    private var keyMonitor: Any?
+    private var displayObserver: NSObjectProtocol?
+
+    /// Presentation-style keys in the main window when nothing is being typed: Return or Space
+    /// sends the preview to the screen, Escape clears the screen.
+    func installScreenKeys() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let window = event.window, window === self.mainWindow, window.attachedSheet == nil,
+                  event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return event }
+            // Typing in a field or editor: the keys are text.
+            if let text = window.firstResponder as? NSText, text.isEditable { return event }
+            switch event.keyCode {
+            case 36, 76, 49: // Return, Enter, Space
+                guard self.output.preview != nil else { return event }
+                withAnimation(Design.slideAnimation) { self.output.take() }
+                return nil
+            case 53: // Escape
+                guard self.output.live != nil else { return event }
+                withAnimation(Design.slideAnimation) { self.output.clearScreen() }
+                return nil
+            default:
+                return event
+            }
+        }
+        displayObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.output.displaysChanged() }
+        }
+    }
+
     /// Bumped by ⌘K to put the cursor in the verse entry field.
     var verseEntryFocusRequest = 0
 

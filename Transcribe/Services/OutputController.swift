@@ -101,12 +101,33 @@ final class OutputController {
     /// A song the operator chose by hand is on screen or in Preview: detections wait in the
     /// queue and never replace it, until the operator clears the screen or resumes.
     private(set) var manualHold = false
+    /// The output window is open (on a projector or as a window).
+    var isWindowOpen = false
+    /// Bumped when displays are connected or removed.
+    private var displaysVersion = 0
+
+    /// The connected display other than this Mac's own screen, if any.
+    var externalDisplayName: String? {
+        _ = displaysVersion
+        guard NSScreen.screens.count > 1 else { return nil }
+        return (outputScreen ?? NSScreen.screens.first { $0 != NSScreen.main })?.localizedName
+    }
+
+    /// Call when displays change (connect or disconnect a projector).
+    func displaysChanged() { displaysVersion += 1 }
+
     /// Songs and verses shown recently, newest first.
     private(set) var recents: [RecentItem] = OutputController.loadRecents()
 
     var mode: Mode {
-        get { Mode(rawValue: UserDefaults.standard.string(forKey: SettingsKey.outputMode) ?? "") ?? .preview }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: SettingsKey.outputMode); modeVersion += 1 }
+        get {
+            if isSelfTestRun, let testMode { return testMode }
+            return Mode(rawValue: UserDefaults.standard.string(forKey: SettingsKey.outputMode) ?? "") ?? .preview
+        }
+        set {
+            if isSelfTestRun { testMode = newValue } else { UserDefaults.standard.set(newValue.rawValue, forKey: SettingsKey.outputMode) }
+            modeVersion += 1
+        }
     }
     /// Detections less sure than this are never sent automatically.
     var threshold: Double {
@@ -114,6 +135,8 @@ final class OutputController {
         set { UserDefaults.standard.set(newValue, forKey: SettingsKey.outputThreshold); modeVersion += 1 }
     }
     private var modeVersion = 0
+    /// The mode during a self-test, kept out of the operator's settings.
+    private var testMode: Mode?
 
     var theme = OutputTheme.load() {
         didSet { theme.save(); refreshAll() }
@@ -181,6 +204,7 @@ final class OutputController {
     func remember(_ item: RecentItem) {
         if case .verse(let reference, _) = item, reference.verseStart == nil { return }
         recents = Array(([item] + recents.filter { $0 != item }).prefix(20))
+        guard !isSelfTestRun else { return }
         UserDefaults.standard.set(try? JSONEncoder().encode(recents), forKey: SettingsKey.recentItems)
     }
 

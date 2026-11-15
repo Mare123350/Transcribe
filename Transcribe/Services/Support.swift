@@ -1,6 +1,13 @@
 import AppKit
 import Foundation
 
+/// True when the app was launched for a Debug self-test or screenshot tour: those runs must not
+/// change the operator's saved settings (recent items, auto-detect mode).
+let isSelfTestRun: Bool = {
+    let flags = ["-PipelineSelfTest", "-PerformanceSelfTest", "-OutputSelfTest", "-LiveSelfTest", "-UIScreenshots", "-LaunchTiming"]
+    return CommandLine.arguments.contains { flags.contains($0) }
+}()
+
 enum SettingsKey {
     static let fontSize = "transcriptFontSize"
     static let locale = "transcriptionLocale"

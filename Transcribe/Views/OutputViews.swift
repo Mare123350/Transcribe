@@ -19,6 +19,8 @@ struct OutputSlideView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color(hex: theme.backgroundColor))
+        // Lists (like the inspector) limit text to one line; a slide shows all of its lines.
+        .lineLimit(nil)
     }
 
     private var canvas: some View {
@@ -107,6 +109,8 @@ struct OutputWindowView: View {
             .onChange(of: window) { place() }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in place() }
             .onReceive(NotificationCenter.default.publisher(for: .outputDisplayChanged)) { _ in place() }
+            .onAppear { model.output.isWindowOpen = true }
+            .onDisappear { model.output.isWindowOpen = false }
     }
 
     /// Fills the chosen display, borderless, above its menu bar. On a single-display Mac it stays
@@ -155,36 +159,25 @@ extension Notification.Name {
     static let outputDisplayChanged = Notification.Name("outputDisplayChanged")
 }
 
-/// Preview and live, side by side like presentation software, with the controls an operator needs.
+/// Preview and Live, like presentation software: what's next, what's on screen, and the controls
+/// to move between them.
 struct OutputPanel: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let output = model.output
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Picker("Auto-detect", selection: Binding(get: { output.mode }, set: { output.mode = $0 })) {
-                    ForEach(OutputController.Mode.allCases) { Text($0.title).tag($0) }
-                }
-                .labelsHidden()
-                .fixedSize()
-                .help(output.mode.explanation)
-                Spacer()
-                Button { openWindow(id: WindowID.output) } label: { Image(systemName: "rectangle.on.rectangle") }
-                    .buttonStyle(.borderless)
-                    .help("Open the output window on the chosen display (⌥⌘O)")
-            }
+        VStack(alignment: .leading, spacing: Design.Space.m) {
+            ModeRow()
+            DisplayStatus()
 
             if output.manualHold {
                 HStack(alignment: .center, spacing: Design.Space.s) {
                     Image(systemName: "hand.raised.fill").foregroundStyle(Design.Palette.song)
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Holding your song").font(.caption.weight(.semibold))
-                            .fixedSize(horizontal: false, vertical: true)
                         Text(output.queue.isEmpty ? "Detections will wait." : "\(output.queue.count) detection\(output.queue.count == 1 ? "" : "s") waiting")
                             .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .layoutPriority(1)
                     Spacer(minLength: 0)
@@ -197,64 +190,207 @@ struct OutputPanel: View {
                 .background(Design.Palette.song.opacity(0.1), in: RoundedRectangle(cornerRadius: Design.Radius.small))
             }
 
-            screen("Preview", cue: output.preview, live: false)
+            ScreenBox(title: "Preview", cue: output.preview, live: false)
             if let cue = output.preview, cue.slides.count > 1 { SlideStrip(cue: cue, onLive: false) }
-            HStack {
+            HStack(spacing: Design.Space.xs) {
                 Button { Task { await output.step(verse: -1, onLive: false) } } label: { Image(systemName: "chevron.left") }
-                    .help("Previous verse or section")
+                    .help("Previous verse or section (⌥⌘←)")
+                    .accessibilityLabel("Previous verse or section")
                 Button { Task { await output.step(verse: 1, onLive: false) } } label: { Image(systemName: "chevron.right") }
-                    .help("Next verse or section")
+                    .help("Next verse or section (⌥⌘→)")
+                    .accessibilityLabel("Next verse or section")
                 if !output.queue.isEmpty {
-                    Text("\(output.queue.count) waiting").font(.caption).foregroundStyle(.secondary)
-                    Button("Skip") { output.skipPreview() }.controlSize(.small)
+                    Text("\(output.queue.count) waiting").font(.caption).foregroundStyle(.secondary).fixedSize()
+                    Button("Skip") { output.skipPreview() }
+                        .help("Drop this one and show the next waiting detection")
                 }
-                Spacer()
-                Button("Send") { output.take() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(output.preview == nil)
-                    .help("Send the preview to the screen (⌘↩)")
+                Spacer(minLength: 0)
+                Button { withAnimation(Design.slideAnimation) { output.take() } } label: {
+                    HStack(spacing: Design.Space.xs) {
+                        Text("Send")
+                        Text("↩").foregroundStyle(.white.opacity(0.75))
+                    }
+                    .frame(minWidth: 64)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .disabled(output.preview == nil)
+                .help("Send the preview to the screen (Return or Space; ⌘↩ while typing)")
             }
             .controlSize(.small)
 
-            screen("Live", cue: output.live, live: true)
+            ScreenBox(title: "Live", cue: output.live, live: true)
             if let cue = output.live, cue.slides.count > 1 { SlideStrip(cue: cue, onLive: true) }
-            HStack {
+            HStack(spacing: Design.Space.xs) {
                 Button { Task { await output.step(slide: -1, onLive: true) } } label: { Image(systemName: "chevron.left") }
                     .help("Previous slide (⌘[)")
+                    .accessibilityLabel("Previous slide")
                 Button { Task { await output.step(slide: 1, onLive: true) } } label: { Image(systemName: "chevron.right") }
                     .help("Next slide (⌘])")
+                    .accessibilityLabel("Next slide")
                 if case .song? = output.live?.source {
                     Toggle("Follow", isOn: Binding(get: { output.followSong }, set: { output.followSong = $0 }))
                         .toggleStyle(.checkbox)
                         .help("Advance the lyrics as the song is sung")
                 }
-                Spacer()
-                Button("Clear", role: .destructive) { output.clearScreen() }
-                    .disabled(output.live == nil)
-                    .help("Clear the screen (⇧⌘⌫)")
+                Spacer(minLength: 0)
+                Button { withAnimation(Design.slideAnimation) { output.clearScreen() } } label: {
+                    HStack(spacing: Design.Space.xs) {
+                        Text("Clear")
+                        Text("⎋").foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(output.live == nil)
+                .help("Clear the screen (Escape; ⇧⌘⌫ while typing)")
             }
             .controlSize(.small)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Design.Space.xs)
+    }
+}
+
+/// The auto-detect mode, what it means, and a warning colour when it sends on its own.
+private struct ModeRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let output = model.output
+        let auto = output.mode == .autoSend
+        VStack(alignment: .leading, spacing: Design.Space.xs) {
+            HStack(spacing: Design.Space.s) {
+                Text("Auto-detect").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Picker("Auto-detect", selection: Binding(get: { output.mode }, set: { output.mode = $0 })) {
+                    ForEach(OutputController.Mode.allCases) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            HStack(alignment: .firstTextBaseline, spacing: Design.Space.xs) {
+                if auto { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Design.Palette.warning) }
+                Text(auto ? "Auto-Send is on: confident detections go straight to the screen." : output.mode.explanation)
+                    .font(.caption)
+                    .foregroundStyle(auto ? Design.Palette.warning : .secondary)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(auto ? Design.Space.s : 0)
+        .background(auto ? Design.Palette.warning.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: Design.Radius.small))
+    }
+}
+
+/// Whether a second display is connected and the output window is showing on it.
+private struct DisplayStatus: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        let output = model.output
+        let external = output.externalDisplayName
+        HStack(spacing: Design.Space.s) {
+            Image(systemName: external == nil ? "laptopcomputer" : "tv")
+                .foregroundStyle(external != nil && output.isWindowOpen ? Design.Palette.good : .secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(external.map { output.isWindowOpen ? "Showing on \($0)" : "\($0) connected" } ?? "No second display")
+                    .font(.caption.weight(.semibold))
+                Text(external == nil
+                     ? (output.isWindowOpen ? "The output is in a window on this screen." : "Connect a projector, or open the output as a window.")
+                     : (output.isWindowOpen ? "The congregation sees what's in Live." : "Open the output to put it on that display."))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if !output.isWindowOpen {
+                Button("Open") { openWindow(id: WindowID.output) }
+                    .controlSize(.small)
+                    .fixedSize()
+                    .help("Open the output screen (⌥⌘O)")
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Preview or Live: a true scaled copy of the output, or a clear empty state.
+private struct ScreenBox: View {
+    let title: String
+    let cue: OutputCue?
+    let live: Bool
+    @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var peeking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Design.Space.xs) {
+            HStack(spacing: Design.Space.xs) {
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+                Spacer(minLength: Design.Space.s)
+                if let slide = cue?.slide {
+                    Text([slide.heading, slide.label].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.caption).lineLimit(1).truncationMode(.middle)
+                }
+            }
+            ZStack {
+                if let cue {
+                    OutputSlideView(slide: cue.slide, theme: model.output.theme)
+                        .id("\(cue.id)-\(cue.page)")
+                        .transition(reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+                } else {
+                    emptyState.transition(.opacity)
+                }
+            }
+            .animation(reduceMotion ? .easeInOut(duration: 0.15) : Design.slideAnimation, value: cue.map { "\($0.id)-\($0.page)" })
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: Design.Radius.small))
+            .overlay(
+                RoundedRectangle(cornerRadius: Design.Radius.small)
+                    .strokeBorder(live && cue != nil ? Design.Palette.live : Color.secondary.opacity(0.35), lineWidth: live && cue != nil ? 3 : 1)
+            )
+            .overlay(alignment: .topLeading) {
+                if live && cue != nil {
+                    Text("LIVE")
+                        .font(.caption2.weight(.heavy))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, Design.Space.s)
+                        .padding(.vertical, Design.Space.xxs)
+                        .background(Design.Palette.live, in: Capsule())
+                        .padding(Design.Space.s)
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { if cue != nil { peeking = true } }
+            .help(cue == nil ? "" : "Click for a larger view")
+            .popover(isPresented: $peeking) {
+                OutputSlideView(slide: cue?.slide, theme: model.output.theme)
+                    .frame(width: 720, height: 405)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(live ? "Live" : "Preview")
+            .accessibilityValue(cue?.slide.map { "\($0.heading). \($0.text)" } ?? (live ? "Nothing on screen" : "Nothing in Preview"))
+        }
     }
 
-    private func screen(_ title: String, cue: OutputCue?, live: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                if live { Circle().fill(cue == nil ? Color.secondary : Color.red).frame(width: 7, height: 7) }
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
-                Spacer()
-                if let slide = cue?.slide { Text(slide.heading).font(.caption).lineLimit(1) }
+    private var emptyState: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Design.Radius.small)
+                .fill(Color.secondary.opacity(0.06))
+            RoundedRectangle(cornerRadius: Design.Radius.small)
+                .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+            VStack(spacing: Design.Space.xs) {
+                Image(systemName: live ? "rectangle.slash" : "rectangle.dashed")
+                    .font(.title2)
+                Text(live ? "Nothing on screen" : "Nothing in Preview").font(.callout.weight(.medium))
+                Text(live ? "Send something from Preview." : "Find a verse or song above, or wait for a detection.")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            OutputSlideView(slide: cue?.slide, theme: model.output.theme)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(live && cue != nil ? Color.red : Color.secondary.opacity(0.3), lineWidth: live && cue != nil ? 2 : 1))
-                .overlay {
-                    if cue == nil {
-                        Text(live ? "Screen is clear" : "Nothing in preview").font(.caption).foregroundStyle(.white.opacity(0.6))
-                    }
-                }
+            .foregroundStyle(.secondary)
+            .padding(Design.Space.m)
         }
     }
 }

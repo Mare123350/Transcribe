@@ -34,7 +34,7 @@ struct ContentView: View {
                     ContentUnavailableView("Nothing to Show", systemImage: "sidebar.right")
                 }
             }
-            .inspectorColumnWidth(min: 260, ideal: 300, max: 520)
+            .inspectorColumnWidth(min: 280, ideal: 320, max: 600)
             // The inspector's own button lives in the inspector's part of the toolbar, so the
             // main buttons never sit across its edge.
             .toolbar {
@@ -50,6 +50,8 @@ struct ContentView: View {
         // The service title is already shown large above the transcript.
         .toolbar(removing: .title)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.windowWidth = $0 }
+        .background(WindowAccessor(window: Binding(get: { model.mainWindow }, set: { model.mainWindow = $0 })))
+        .onAppear { model.installScreenKeys() }
         .sheet(isPresented: $model.isChoosingInput) { InputChooserSheet() }
         #if DEBUG
         .modifier(DebugLibraryOpener())
