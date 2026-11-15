@@ -34,6 +34,10 @@ struct RecordingToolbar: ToolbarContent {
             }
             .disabled(model.selectedSession == nil)
             .help("Export as Markdown, PDF, Word, or text (⌘E)")
+            Button { openWindow(id: WindowID.songLibrary) } label: {
+                Label("Song Library", systemImage: "music.note.list")
+            }
+            .help("Open the song library to add or import songs (⇧⌘L)")
             Button { openWindow(id: WindowID.output) } label: {
                 Label("Output Screen", systemImage: "rectangle.on.rectangle")
             }

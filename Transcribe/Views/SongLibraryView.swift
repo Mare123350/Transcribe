@@ -32,15 +32,22 @@ struct SongLibraryView: View {
                 }
             }
             .searchable(text: $search, placement: .sidebar)
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
-            .toolbar {
-                ToolbarItemGroup {
+            .navigationSplitViewColumnWidth(min: 240, ideal: 280)
+            // Always-visible buttons under the list (toolbar items in a narrow sidebar get hidden).
+            .safeAreaInset(edge: .bottom) {
+                HStack(spacing: 8) {
                     Button { add() } label: { Label("New Song", systemImage: "plus") }
-                    Button { importing = true } label: { Label("Import", systemImage: "square.and.arrow.down") }
+                        .help("Add a song by typing its lyrics")
+                    Button { importing = true } label: { Label("Import…", systemImage: "square.and.arrow.down") }
                         .help("Import songs from JSON or plain text")
-                    Button { exporting = true } label: { Label("Export", systemImage: "square.and.arrow.up") }
+                    Spacer()
+                    Button { exporting = true } label: { Image(systemName: "square.and.arrow.up") }
                         .help("Export the library as JSON")
+                        .disabled(songs.isEmpty)
                 }
+                .controlSize(.regular)
+                .padding(10)
+                .background(.bar)
             }
         } detail: {
             if let selection {
@@ -51,6 +58,10 @@ struct SongLibraryView: View {
                     Label("\(songs.count) Songs", systemImage: "music.note.list")
                 } description: {
                     Text("Transcribe recognizes these songs while they're sung and shows the clean lyrics. Modern worship songs are copyrighted: import them under your church's CCLI or similar licence.")
+                } actions: {
+                    Button { add() } label: { Label("New Song", systemImage: "plus") }
+                        .buttonStyle(.borderedProminent)
+                    Button { importing = true } label: { Label("Import Songs…", systemImage: "square.and.arrow.down") }
                 }
             }
         }

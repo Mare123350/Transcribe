@@ -37,7 +37,20 @@ final class ScriptureService {
     static let contextWindow: TimeInterval = 180
     /// A card shown from in-progress text before the phrase is finished. The finished segment
     /// adopts it (moving and correcting it) or removes it.
-    private var provisional: (itemID: UUID, key: String)?
+    private var provisional: [(itemID: UUID, reference: BibleReference)] = []
+    /// References in the latest in-progress text: a card for one of these stays even if a
+    /// finished line didn't include it yet (the sentence is still going).
+    private var partialKeys: Set<String> = []
+    /// The last card placed after a segment, so several cards from one line stay in order.
+    private var anchor: (segmentID: UUID, item: TranscriptItem)?
+
+    /// Where the next card for `segment` goes: after the segment, or after its last card.
+    private func placement(after segment: TranscriptItem, in session: Session) -> Double {
+        if let anchor, anchor.segmentID == segment.id, !anchor.item.isDeleted {
+            return session.sortIndex(after: anchor.item)
+        }
+        return session.sortIndex(after: segment)
+    }
     private var lastPartial = ""
 
     private struct Listening {
@@ -248,7 +261,8 @@ final class ScriptureService {
 
     func reset() {
         listening.removeAll()
-        provisional = nil
+        provisional = []
+        partialKeys = []
         lastPartial = ""
         recent.removeAll()
         previousSegment = nil
@@ -264,40 +278,53 @@ final class ScriptureService {
         if let last = lastReference, session.duration - last.time > Self.contextWindow { lastReference = nil }
         let found = detector.references(in: text, context: lastReference?.reference)
             .filter { $0.confidence >= 0.75 && $0.form == .absolute }
-        guard let detection = found.last else { return }
-        let reference = detection.reference
+        partialKeys = Set(found.map(\.reference.key))
         let named = detector.namedVersion(in: text)
 
-        if let current = provisional, let item = item(current.itemID) {
-            // "John 3" became "John 3:16" as the speaker went on.
-            guard current.key != reference.key else { return }
-            provisional = (current.itemID, reference.key)
+        // Every reference in a long sentence gets its own card as soon as it's said.
+        for detection in found {
+            let reference = detection.reference
+            if provisional.contains(where: { $0.reference == reference }) { continue }
+            if recent.contains(where: { $0.key == reference.key }) { continue }
+
+            // "John 3" became "John 3:16" as the speaker went on: sharpen that card.
+            if let index = provisional.firstIndex(where: { Self.refines($0.reference, into: reference) }),
+               let item = item(provisional[index].itemID) {
+                provisional[index].reference = reference
+                item.reference = reference.description
+                item.referenceKey = reference.key
+                await show(item, reference: reference, requested: named)
+                continue
+            }
+
+            let item = TranscriptItem(kind: .verse, sortIndex: session.nextSortIndex, timestamp: session.duration)
+            item.verseSource = .reference
             item.reference = reference.description
             item.referenceKey = reference.key
+            item.referenceConfidence = detection.confidence
+            context.insert(item)
+            item.session = session
+            known[item.id] = item
+            provisional.append((item.id, reference))
             await show(item, reference: reference, requested: named)
-            return
+            onDetected?(item, detection.confidence)
         }
-        guard !recent.contains(where: { $0.key == reference.key }) else { return }
+    }
 
-        let item = TranscriptItem(kind: .verse, sortIndex: session.nextSortIndex, timestamp: session.duration)
-        item.verseSource = .reference
-        item.reference = reference.description
-        item.referenceKey = reference.key
-        item.referenceConfidence = detection.confidence
-        context.insert(item)
-        item.session = session
-        known[item.id] = item
-        provisional = (item.id, reference.key)
-        await show(item, reference: reference, requested: named)
-        onDetected?(item, detection.confidence)
+    /// Whether `new` is the same passage said more fully ("John 3" -> "John 3:16", "John 3:16" -> "John 3:16-18").
+    static func refines(_ old: BibleReference, into new: BibleReference) -> Bool {
+        guard old.book == new.book, old.chapter == new.chapter, old != new else { return false }
+        return old.verseStart == nil || old.verseStart == new.verseStart
     }
 
     /// The card shown from in-progress text, moved to just after the segment that finished it.
-    private func adoptProvisional(after segment: TranscriptItem, in session: Session) -> TranscriptItem? {
-        guard let current = provisional else { return nil }
-        provisional = nil
-        guard let item = item(current.itemID) else { return nil }
-        item.sortIndex = session.sortIndex(after: segment)
+    private func adoptProvisional(_ reference: BibleReference, after segment: TranscriptItem, in session: Session) -> TranscriptItem? {
+        guard let index = provisional.firstIndex(where: { $0.reference == reference })
+                ?? provisional.firstIndex(where: { Self.refines($0.reference, into: reference) || Self.refines(reference, into: $0.reference) })
+        else { return nil }
+        let entry = provisional.remove(at: index)
+        guard let item = item(entry.itemID) else { return nil }
+        item.sortIndex = placement(after: segment, in: session)
         item.timestamp = segment.timestamp
         TranscriptLayout.invalidate(session)
         return item
@@ -308,10 +335,12 @@ final class ScriptureService {
         lastPartial = ""
         defer {
             // The finished words had no reference after all: take the early card away.
-            if let leftover = provisional {
-                provisional = nil
+            // Early cards whose words were finished without a reference were misheard; cards for
+            // words still being spoken stay.
+            for leftover in provisional where !partialKeys.contains(leftover.reference.key) {
                 if let item = item(leftover.itemID) { remove(item) }
             }
+            provisional.removeAll { !partialKeys.contains($0.reference.key) }
         }
         let text = segment.text
         let time = segment.timestamp
@@ -373,8 +402,9 @@ final class ScriptureService {
         }) else { return }
 
         if detection.confidence >= 0.75 { lastReference = (reference, segment.timestamp) }
-        let item = adoptProvisional(after: segment, in: session)
-            ?? TranscriptItem(kind: .verse, sortIndex: session.sortIndex(after: segment), timestamp: segment.timestamp)
+        let item = adoptProvisional(reference, after: segment, in: session)
+            ?? TranscriptItem(kind: .verse, sortIndex: placement(after: segment, in: session), timestamp: segment.timestamp)
+        anchor = (segment.id, item)
         item.verseSource = .reference
         item.reference = reference.description
         item.referenceKey = reference.key
@@ -473,7 +503,8 @@ final class ScriptureService {
             }
             guard !covered else { continue }
 
-            let item = TranscriptItem(kind: .verse, sortIndex: session.sortIndex(after: segment), timestamp: segment.timestamp)
+            let item = TranscriptItem(kind: .verse, sortIndex: placement(after: segment, in: session), timestamp: segment.timestamp)
+            anchor = (segment.id, item)
             item.verseSource = .quote
             item.reference = match.reference.description
             item.referenceKey = key
