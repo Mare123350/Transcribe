@@ -82,6 +82,7 @@ final class AppModel {
         if LiveSelfTest.isRequested { Task { await LiveSelfTest.run(self) } }
         if PerformanceSelfTest.isRequested { Task { await PerformanceSelfTest.run(self) } }
         if OutputSelfTest.isRequested { Task { await OutputSelfTest.run(self) } }
+        if ScreenshotTour.label != nil { Task { await ScreenshotTour.run(self) } }
         #endif
     }
 

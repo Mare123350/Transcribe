@@ -221,6 +221,17 @@ final class RecordingController {
 
     #if DEBUG
     func debugSetVolatile(_ text: String) { volatileText = text }
+
+    /// Shows the recording state without a microphone, for screenshots.
+    func debugSimulateRecording(in session: Session) {
+        self.session = session
+        timeOffset = 0
+        runAccumulated = 754
+        runStartedAt = .now
+        level = 0.62
+        volatileText = "But waiting on God means letting him be God, and trusting his timing"
+        state = .recording
+    }
     #endif
 
     // MARK: - Events
