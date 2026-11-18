@@ -160,8 +160,7 @@ struct VerseEntryView: View {
     }
 
     private func groupLabel(_ title: String) -> some View {
-        Text(title).font(Design.Typography.label).foregroundStyle(.secondary).textCase(.uppercase)
-            .padding(.top, Design.Space.xs)
+        GroupLabel(title).padding(.top, Design.Space.xs)
     }
 
     private func row<Content: View>(selected: Bool, @ViewBuilder content: () -> Content, action: @escaping () -> Void) -> some View {
@@ -223,7 +222,7 @@ private struct RecentList: View {
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: Design.Space.xxs) {
-                Text("Recent").font(Design.Typography.label).foregroundStyle(.secondary).textCase(.uppercase)
+                GroupLabel("Recent")
                 ForEach(recents) { item in
                     Button { Task { await model.output.previewOnly(source(item)) } } label: {
                         HStack(spacing: Design.Space.xs) {

@@ -23,7 +23,7 @@ struct SongBlockView: View {
                     }
                     Spacer()
                     if item.status == .detected {
-                        Text("\(Int(item.confidence * 100))% match")
+                        Text("\(PercentFormat.string(item.confidence)) match")
                             .font(Design.Typography.timestamp)
                             .foregroundStyle(.secondary)
                     }
@@ -35,10 +35,7 @@ struct SongBlockView: View {
                 ForEach(Array(item.lyricSections.enumerated()), id: \.offset) { _, section in
                     VStack(alignment: .leading, spacing: Design.Space.xxs) {
                         if !section.name.isEmpty {
-                            Text(section.name)
-                                .font(Design.Typography.label)
-                                .foregroundStyle(Design.Palette.song)
-                                .textCase(.uppercase)
+                            GroupLabel(section.name, color: Design.Palette.song)
                         }
                         Text(section.lyrics)
                             .font(.system(size: fontSize))
@@ -68,12 +65,7 @@ struct SongBlockView: View {
                     }
                 }
             }
-            .padding(Design.Layout.cardPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Design.Palette.song.opacity(Design.Opacity.wash), in: RoundedRectangle(cornerRadius: Design.Radius.medium))
-            .overlay(alignment: .leading) {
-                UnevenRoundedRectangle(topLeadingRadius: Design.Radius.medium, bottomLeadingRadius: Design.Radius.medium).fill(Design.Palette.song).frame(width: Design.Layout.cardStripe)
-            }
+            .categoryCard(Design.Palette.song)
         }
         .contextMenu {
             if item.status == .detected { Button("Confirm Song") { model.songs.confirm(item) } }
@@ -94,7 +86,7 @@ struct DetectedSongChip: View {
         HStack(spacing: Design.Space.s) {
             Image(systemName: "music.note")
                 .foregroundStyle(Design.Palette.song)
-            Text("Detected: **\(item.title)** (\(Int(item.confidence * 100))%)")
+            Text("Detected: **\(item.title)** (\(PercentFormat.string(item.confidence)))")
                 .lineLimit(1)
             Button("Confirm") { model.songs.confirm(item) }
                 .buttonStyle(.borderedProminent)

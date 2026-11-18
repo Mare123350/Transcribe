@@ -61,8 +61,7 @@ struct ExportSheet: View {
                     .disabled(working)
             }
         }
-        .padding(Design.Layout.sheetPadding)
-        .frame(width: Design.Layout.sheetWidth)
+        .sheetLayout()
     }
 
     private func export() async {

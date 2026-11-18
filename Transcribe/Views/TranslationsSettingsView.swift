@@ -181,8 +181,7 @@ private struct ImportTranslationSheet: View {
                     .disabled(!licensed || abbreviation.trimmingCharacters(in: .whitespaces).isEmpty || installing)
             }
         }
-        .padding(Design.Layout.sheetPadding)
-        .frame(width: Design.Layout.sheetWidth)
+        .sheetLayout()
         .onAppear {
             abbreviation = parsed.abbreviation
             name = parsed.name

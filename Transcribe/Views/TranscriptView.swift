@@ -159,7 +159,7 @@ private struct TranscriptHeaderView: View {
             if let progress = generator.progress[session.id] {
                 ProgressView(value: progress)
                     .frame(maxWidth: 220)
-                Text("Transcribing… \(Int(progress * 100))%")
+                Text("Transcribing… \(PercentFormat.string(progress))")
                     .font(.callout).foregroundStyle(.secondary).monospacedDigit()
                 Button("Cancel") { generator.cancel(session) }
                     .controlSize(.small)

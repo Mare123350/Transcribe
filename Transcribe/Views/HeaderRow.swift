@@ -36,7 +36,7 @@ struct HeaderRow: View {
                         .padding(.vertical, Design.Space.xxs / 2)
                         .background(.quaternary, in: Capsule())
                         .foregroundStyle(.secondary)
-                        .help(item.confidence > 0 ? "Added automatically (\(Int(item.confidence * 100))% sure)" : "Added automatically")
+                        .help(item.confidence > 0 ? "Added automatically (\(PercentFormat.string(item.confidence)) sure)" : "Added automatically")
                 }
                 Spacer()
                 TimestampLabel(seconds: item.timestamp)

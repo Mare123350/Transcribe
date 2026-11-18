@@ -51,12 +51,7 @@ struct VerseCalloutView: View {
                     }
                 }
             }
-            .padding(Design.Layout.cardPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Design.Palette.scripture.opacity(Design.Opacity.wash), in: RoundedRectangle(cornerRadius: Design.Radius.medium))
-            .overlay(alignment: .leading) {
-                UnevenRoundedRectangle(topLeadingRadius: Design.Radius.medium, bottomLeadingRadius: Design.Radius.medium).fill(Design.Palette.scripture).frame(width: Design.Layout.cardStripe)
-            }
+            .categoryCard(Design.Palette.scripture)
         }
         .contextMenu { menuItems }
     }
@@ -91,7 +86,7 @@ struct VerseCalloutView: View {
             Menu {
                 versionMenu
             } label: {
-                Text(versionLabel)
+                Text(item.versionLabel)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -107,15 +102,6 @@ struct VerseCalloutView: View {
         }
     }
 
-    private var versionLabel: String {
-        if item.versionAbbreviation.isEmpty { return "Identifying version…" }
-        if item.versionNamedBySpeaker && item.requestedVersion.isEmpty { return "\(item.versionAbbreviation) (named by speaker)" }
-        if !item.requestedVersion.isEmpty || !item.verseCopyright.isEmpty { return item.versionAbbreviation }
-        if item.verseSource == .manual || item.status == .confirmed && item.versionScores.isEmpty { return item.versionAbbreviation }
-        if !item.versionSettled && item.confidence == 0 { return "\(item.versionAbbreviation) (default)" }
-        return "\(item.versionAbbreviation), \(Int((item.confidence * 100).rounded()))%"
-    }
-
     @ViewBuilder private var versionMenu: some View {
         let scores = Dictionary(item.versionScores.map { ($0.abbreviation, $0.score) }, uniquingKeysWith: max)
         ForEach(model.scripture.allVersionNames, id: \.abbreviation) { version in
@@ -123,7 +109,7 @@ struct VerseCalloutView: View {
                 Task { await model.scripture.changeVersion(of: item, to: version.abbreviation) }
             } label: {
                 if let score = scores[version.abbreviation] {
-                    Text("\(version.abbreviation) — \(version.name) (\(Int(score * 100))%)")
+                    Text("\(version.abbreviation) — \(version.name) (\(PercentFormat.string(score)))")
                 } else {
                     Text("\(version.abbreviation) — \(version.name)")
                 }
@@ -212,8 +198,7 @@ struct InsertVerseSheet: View {
                     .disabled(parsed == nil)
             }
         }
-        .padding(Design.Layout.sheetPadding)
-        .frame(width: Design.Layout.sheetWidth)
+        .sheetLayout()
         .onAppear { abbreviation = model.scripture.defaultAbbreviation }
         .task(id: "\(text)|\(abbreviation)") {
             guard let parsed else { preview = ""; return }
@@ -255,5 +240,18 @@ struct SendToScreenButtons: View {
         }
         .buttonStyle(.borderless)
         .controlSize(.small)
+    }
+}
+
+extension TranscriptItem {
+    /// The version a verse card shows and how sure that is: "NIV, 92%", "KJV (named by speaker)".
+    /// One place, so the card and the inspector agree.
+    var versionLabel: String {
+        if versionAbbreviation.isEmpty { return "Identifying version…" }
+        if versionNamedBySpeaker && requestedVersion.isEmpty { return "\(versionAbbreviation) (named by speaker)" }
+        if !requestedVersion.isEmpty || !verseCopyright.isEmpty { return versionAbbreviation }
+        if verseSource == .manual || status == .confirmed && versionScores.isEmpty { return versionAbbreviation }
+        if !versionSettled && confidence == 0 { return "\(versionAbbreviation) (default)" }
+        return "\(versionAbbreviation), \(PercentFormat.string(confidence))"
     }
 }

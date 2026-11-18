@@ -338,7 +338,7 @@ private struct ScreenBox: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.Space.xs) {
             HStack(spacing: Design.Space.xs) {
-                Text(title).font(Design.Typography.label).foregroundStyle(.secondary).textCase(.uppercase)
+                GroupLabel(title)
                 Spacer(minLength: Design.Space.s)
                 if let slide = cue?.slide {
                     Text([slide.heading, slide.label].filter { !$0.isEmpty }.joined(separator: " · "))

@@ -113,4 +113,36 @@ extension View {
     func floatingShadow() -> some View {
         shadow(color: Design.Elevation.floatingColor, radius: Design.Elevation.floatingRadius, y: Design.Elevation.floatingY)
     }
+
+    /// A song or verse card: washed in its category colour, with a bar of it on the leading edge.
+    func categoryCard(_ color: Color) -> some View {
+        padding(Design.Layout.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(color.opacity(Design.Opacity.wash), in: RoundedRectangle(cornerRadius: Design.Radius.medium))
+            .overlay(alignment: .leading) {
+                UnevenRoundedRectangle(topLeadingRadius: Design.Radius.medium, bottomLeadingRadius: Design.Radius.medium)
+                    .fill(color)
+                    .frame(width: Design.Layout.cardStripe)
+            }
+    }
+
+    /// A form sheet: fixed width, standard padding.
+    func sheetLayout() -> some View {
+        padding(Design.Layout.sheetPadding).frame(width: Design.Layout.sheetWidth)
+    }
+}
+
+/// The small label over a group ("Preview", "Recent", a song's "Chorus").
+struct GroupLabel: View {
+    let title: String
+    var color: Color = .secondary
+
+    init(_ title: String, color: Color = .secondary) {
+        self.title = title
+        self.color = color
+    }
+
+    var body: some View {
+        Text(title).font(Design.Typography.label).foregroundStyle(color).textCase(.uppercase)
+    }
 }

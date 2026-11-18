@@ -69,7 +69,7 @@ private struct JumpSections: View {
                         Label {
                             VStack(alignment: .leading) {
                                 Text(item.title)
-                                Text(item.status == .confirmed ? "Confirmed" : "Detected · \(Int(item.confidence * 100))%")
+                                Text(item.status == .confirmed ? "Confirmed" : "Detected, \(PercentFormat.string(item.confidence))")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         } icon: {
@@ -85,7 +85,7 @@ private struct JumpSections: View {
                         Label {
                             VStack(alignment: .leading) {
                                 Text(item.reference)
-                                Text(versionLine(item)).font(.caption).foregroundStyle(.secondary)
+                                Text(item.versionLabel).font(.caption).foregroundStyle(.secondary)
                             }
                         } icon: {
                             Image(systemName: "book.closed")
@@ -104,12 +104,6 @@ private struct JumpSections: View {
         Text(text).font(.caption).foregroundStyle(.secondary)
     }
 
-    private func versionLine(_ item: TranscriptItem) -> String {
-        guard !item.versionAbbreviation.isEmpty else { return "Identifying version…" }
-        if item.versionNamedBySpeaker { return "\(item.versionAbbreviation) · named by speaker" }
-        if item.verseSource == .manual { return item.versionAbbreviation }
-        return "\(item.versionAbbreviation) · \(Int(item.confidence * 100))%"
-    }
 }
 
 /// One row to jump to. Its own view, so SwiftUI skips rows whose item hasn't changed when a new

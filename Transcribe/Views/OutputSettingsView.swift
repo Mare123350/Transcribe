@@ -34,7 +34,7 @@ struct OutputSettings: View {
                         Text("Threshold")
                     } minimumValueLabel: { Text("75%").font(.caption) } maximumValueLabel: { Text("99%").font(.caption) }
                 }
-                Text("Detections below \(Int(output.threshold * 100))% confidence, and references that need confirming, always wait in Preview.")
+                Text("Detections below \(PercentFormat.string(output.threshold)) confidence, and references that need confirming, always wait in Preview.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

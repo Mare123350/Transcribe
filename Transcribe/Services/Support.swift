@@ -92,6 +92,24 @@ enum PermissionProblem: Identifiable, Equatable {
     }
 }
 
+#if DEBUG
+/// How a Debug self-test ends: write its report, print where it went for the calling script, quit.
+enum SelfTestReport {
+    static func finish(_ lines: [String], to url: URL, tag: String, printing printed: URL? = nil) -> Never {
+        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+        print("\(tag) \((printed ?? url).path)")
+        exit(0)
+    }
+}
+#endif
+
+enum PercentFormat {
+    /// 0.915 -> "92%". Rounded, so the same score reads the same everywhere.
+    static func string(_ fraction: Double) -> String {
+        "\(Int((fraction * 100).rounded()))%"
+    }
+}
+
 enum TimeFormat {
     /// 75 -> "1:15", 3725 -> "1:02:05"
     static func clock(_ seconds: TimeInterval) -> String {

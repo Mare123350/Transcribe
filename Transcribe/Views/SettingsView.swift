@@ -115,7 +115,7 @@ private struct SongSettings: View {
                         Text("Threshold")
                     } minimumValueLabel: { Text("More").font(.caption) } maximumValueLabel: { Text("Fewer").font(.caption) }
                 }
-                Text("Match needed to detect a song: \(Int(threshold * 100))%. Lower it if songs are missed; raise it if speech is mistaken for songs.")
+                Text("Match needed to detect a song: \(PercentFormat.string(threshold)). Lower it if songs are missed; raise it if speech is mistaken for songs.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Replace sung transcription with the library lyrics", isOn: $replaceSungText)
                 Text("The sung transcription is kept, folded under each song.")
