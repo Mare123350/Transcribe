@@ -388,7 +388,9 @@ final class OSISReader: XMLVerseReader {
         case "osisText":
             if let work = attributes["osisIDWork"], abbreviation.isEmpty { abbreviation = work }
         case "header": inHeader = true
-        case "title", "rights", "description" where inHeader:
+        // Each pattern needs its own `where`: a single trailing one guards only "description",
+        // which let body titles (headings, psalm titles) through into the verse text.
+        case "title" where inHeader, "rights" where inHeader, "description" where inHeader:
             headerField = element
         case "note", "title":
             skipDepth += 1
@@ -406,7 +408,7 @@ final class OSISReader: XMLVerseReader {
     func parser(_ parser: XMLParser, didEndElement element: String, namespaceURI: String?, qualifiedName: String?) {
         switch element {
         case "header": inHeader = false
-        case "title", "rights", "description" where inHeader:
+        case "title" where inHeader, "rights" where inHeader, "description" where inHeader:
             headerField = nil
         case "note", "title":
             skipDepth = max(0, skipDepth - 1)

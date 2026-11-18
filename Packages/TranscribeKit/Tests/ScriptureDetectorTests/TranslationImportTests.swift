@@ -45,6 +45,22 @@ struct TranslationImportTests {
         #expect(parsed.warnings.contains { $0.contains("Tob") })
     }
 
+    @Test("OSIS: a title inside an open verse (a psalm title) stays out of the verse text")
+    func osisTitleInsideVerse() throws {
+        let url = try temporaryFile("psalm.xml", """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace">
+              <osisText osisIDWork="TST">
+                <div type="book" osisID="Ps"><chapter osisID="Ps.3">
+                  <verse sID="Ps.3.1" osisID="Ps.3.1"/><title type="psalm">A Psalm of David.</title>LORD, how are they increased that trouble me!<verse eID="Ps.3.1"/>
+                </chapter></div>
+              </osisText>
+            </osis>
+            """)
+        let parsed = try TranslationImporter.parse(url)
+        #expect(text(parsed, "PSA", 3, 1) == "LORD, how are they increased that trouble me!")
+    }
+
     @Test("USFM: footnotes, word attributes, headings and bridged verses")
     func usfm() throws {
         let url = try temporaryFile("43JHNTST.usfm", #"""
