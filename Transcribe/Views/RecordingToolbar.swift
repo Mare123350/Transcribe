@@ -88,7 +88,15 @@ private struct RecordingControls: View {
                 .help("Microphone level: green is good, amber is loud, red is clipping")
                 .accessibilityElement()
                 .accessibilityLabel("Input level")
-                .accessibilityValue(recorder.state == .recording ? "\(Int(recorder.level * 100)) percent" : "Not recording")
+                .accessibilityValue(recorder.state == .recording ? "Recording" : "Not recording")
+
+            if let problem = recorder.audioProblem {
+                // The words are still detected; only the saved audio (for a later transcript) stopped.
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Design.Palette.warning)
+                    .help(problem)
+                    .accessibilityLabel(problem)
+            }
         }
         .padding(.horizontal, Design.Space.s)
         .fixedSize()
@@ -134,10 +142,8 @@ private struct RecordingStatus: View {
             HStack(spacing: Design.Space.xs) {
                 switch recorder.state {
                 case .recording:
-                    Circle()
-                        .fill(Design.Palette.recording)
+                    PulsingDot(color: NSColor(Design.Palette.recording), pulses: !reduceMotion)
                         .frame(width: 9, height: 9)
-                        .phaseAnimator(reduceMotion ? [1.0] : [1.0, 0.35]) { dot, phase in dot.opacity(phase) } animation: { _ in .easeInOut(duration: 0.8) }
                     Text(TimeFormat.clock(recorder.elapsed(at: context.date)))
                         .font(.callout.monospacedDigit().weight(.semibold))
                         .foregroundStyle(Design.Palette.recording)
@@ -211,6 +217,7 @@ final class LevelMeterView: NSView {
     private var timer: Timer?
     /// When the level last rose above silence, to say "No input" after a few quiet seconds.
     private var lastSound = Date()
+    private var lastDrawn: (value: CGFloat, silent: Bool, size: CGSize)?
 
     init(read: @escaping @MainActor () -> (level: Float, active: Bool)) {
         self.read = read
@@ -254,6 +261,10 @@ final class LevelMeterView: NSView {
         let value = CGFloat(active ? max(0, min(1, level)) : 0)
         if !active || value > 0.04 { lastSound = .now }
         let silent = active && Date.now.timeIntervalSince(lastSound) > 3
+        // Nothing to redraw: skip the layer transaction (most ticks while idle or quiet).
+        let drawn = (value: (value * 50).rounded(), silent: silent, size: bounds.size)
+        if let last = lastDrawn, last.value == drawn.value, last.silent == drawn.silent, last.size == drawn.size { return }
+        lastDrawn = drawn
 
         CATransaction.begin()
         CATransaction.setAnimationDuration(1.0 / 15)
@@ -347,5 +358,42 @@ struct InputChooserSheet: View {
         .padding(Design.Space.xl)
         .frame(width: 380)
         .onAppear { devices = AudioDeviceCatalog.inputDevices() }
+    }
+}
+
+/// The recording dot. Core Animation runs the pulse outside the app, so it doesn't make SwiftUI
+/// redraw the toolbar every frame for the length of a service.
+private struct PulsingDot: NSViewRepresentable {
+    let color: NSColor
+    let pulses: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        view.layer?.cornerRadius = 4.5
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        guard let layer = view.layer else { return }
+        layer.backgroundColor = color.cgColor
+        let running = layer.animation(forKey: "pulse") != nil
+        if pulses && !running {
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 1.0
+            pulse.toValue = 0.35
+            pulse.duration = 0.8
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            pulse.isRemovedOnCompletion = false
+            layer.add(pulse, forKey: "pulse")
+        } else if !pulses && running {
+            layer.removeAnimation(forKey: "pulse")
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
+        CGSize(width: 9, height: 9)
     }
 }

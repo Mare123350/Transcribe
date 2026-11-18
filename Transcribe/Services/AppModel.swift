@@ -71,6 +71,8 @@ final class AppModel {
     let songs: SongService
     let sections: SectionService
     let output: OutputController
+    /// Makes full transcripts from saved audio.
+    let transcriptGenerator = TranscriptGenerator()
 
     /// Finalized segments are analysed one at a time, in order. Songs and scripture are quick;
     /// section headers wait for the on-device language model (seconds), so they run in their own
@@ -94,7 +96,9 @@ final class AppModel {
         self.sectionSegments = sectionContinuation
         recoverInterruptedSessions()
 
-        recorder.onSegment = { [continuation] item, session in continuation.yield(SegmentRef(item: item, session: session)) }
+        recorder.onSegment = { [continuation] item, session in
+            continuation.yield(SegmentRef(item: item, session: session, isSaved: item.modelContext != nil))
+        }
         pipelineTask = Task { [weak self] in
             for await ref in stream {
                 guard let self, let (item, session) = ref.live else { continue }
@@ -125,6 +129,7 @@ final class AppModel {
         #if DEBUG
         if PipelineSelfTest.isRequested { Task { await PipelineSelfTest.run(self) } }
         if LiveSelfTest.isRequested { Task { await LiveSelfTest.run(self) } }
+        if SoakSelfTest.isRequested { Task { await SoakSelfTest.run(self) } }
         if PerformanceSelfTest.isRequested { Task { await PerformanceSelfTest.run(self) } }
         if OutputSelfTest.isRequested { Task { await OutputSelfTest.run(self) } }
         if ScreenshotTour.label != nil { Task { await ScreenshotTour.run(self) } }
@@ -138,7 +143,7 @@ final class AppModel {
     #endif
 
     private func analyse(_ segment: TranscriptItem, in session: Session) async {
-        let sung = songs.process(segment, in: session)
+        let sung = await songs.process(segment, in: session)
         if !sung {
             await scripture.process(segment, in: session)
             #if DEBUG
@@ -146,7 +151,7 @@ final class AppModel {
             if PipelineSelfTest.isRequested || OutputSelfTest.isRequested { await sections.process(segment, in: session); return }
             #endif
             pendingSectionSegments += 1
-            sectionSegments.yield(SegmentRef(item: segment, session: session))
+            sectionSegments.yield(SegmentRef(item: segment, session: session, isSaved: segment.modelContext != nil))
         }
     }
 
@@ -156,17 +161,19 @@ final class AppModel {
 
     private var latestPartial: (text: String, session: Session)?
     private var partialTask: Task<Void, Never>?
+    private var latestPartialTime: TimeInterval = 0
 
     /// In-progress text is checked for scripture at most every 250 ms, newest text first.
     private func partialTextChanged(_ text: String, in session: Session) {
         latestPartial = (text, session)
+        latestPartialTime = recorder.currentTime
         guard partialTask == nil else { return }
         partialTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard let self else { return }
             self.partialTask = nil
             guard let (text, session) = self.latestPartial, !text.isEmpty, !self.songs.isSinging else { return }
-            await self.scripture.processPartial(text, in: session)
+            await self.scripture.processPartial(text, in: session, at: self.latestPartialTime)
         }
     }
 
@@ -184,6 +191,8 @@ final class AppModel {
     func delete(_ session: Session) {
         guard recorder.session !== session || !recorder.isActive else { return }
         if selectedSession === session { selectedSession = nil }
+        transcriptGenerator.cancel(session)
+        ServiceAudio.delete(for: session.id)
         context.delete(session)
         try? context.save()
     }
@@ -329,10 +338,12 @@ final class AppModel {
 struct SegmentRef: @unchecked Sendable {
     let item: TranscriptItem
     let session: Session
+    /// False for phrases heard in "Scripture and songs only": detached items that are never saved.
+    let isSaved: Bool
 
     /// Nil if either was deleted while waiting.
     @MainActor var live: (TranscriptItem, Session)? {
-        guard !item.isDeleted, item.modelContext != nil, !session.isDeleted, session.modelContext != nil else { return nil }
+        guard !item.isDeleted, !isSaved || item.modelContext != nil, !session.isDeleted, session.modelContext != nil else { return nil }
         return (item, session)
     }
 }

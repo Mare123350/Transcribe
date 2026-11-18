@@ -44,9 +44,9 @@ private struct SessionRow: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 if model.recorder.session === session && model.recorder.isActive {
-                    Image(systemName: model.recorder.state == .paused ? "pause.circle.fill" : "record.circle")
+                    // Still, not pulsing: a running animation redraws the window every frame.
+                    Image(systemName: model.recorder.state == .paused ? "pause.circle.fill" : "record.circle.fill")
                         .foregroundStyle(.red)
-                        .symbolEffect(.pulse, isActive: model.recorder.state == .recording)
                 }
                 if isRenaming {
                     TextField("Title", text: $session.title)

@@ -48,6 +48,16 @@ public actor ScriptureDetector {
         VersionNameDetector.detect(in: text)
     }
 
+    /// The same as `references(in:context:)`, run on this actor so the caller's thread (the main
+    /// thread, during a service) stays free.
+    public func findReferences(in text: String, context: BibleReference? = nil) -> [DetectedReference] {
+        ReferenceParser.parse(text, context: context)
+    }
+
+    public func findNamedVersion(in text: String) -> String? {
+        VersionNameDetector.detect(in: text)
+    }
+
     public func translation(abbreviation: String) -> BibleTranslation? {
         translations.first { $0.info.abbreviation.caseInsensitiveCompare(abbreviation) == .orderedSame }
     }

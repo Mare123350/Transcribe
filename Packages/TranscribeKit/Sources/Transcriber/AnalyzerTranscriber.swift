@@ -113,3 +113,35 @@ actor LocaleCache {
     func value(for identifier: String) -> Locale?? { values[identifier] }
     func store(_ locale: Locale?, for identifier: String) { values[identifier] = locale }
 }
+
+extension AnalyzerTranscriber {
+    /// Transcribes a saved recording as fast as the Mac allows, reporting each finished phrase with
+    /// its time in the file. Used to make the full transcript of a service recorded with
+    /// "Scripture and songs only".
+    public static func transcribeFile(_ url: URL, locale: Locale, onSegment: @escaping @Sendable (TranscribedSegment) async -> Void) async throws {
+        guard let supported = await supportedLocale(for: locale) else {
+            throw TranscriberError.unsupportedLocale(locale.identifier)
+        }
+        let transcriber = SpeechTranscriber(locale: supported, transcriptionOptions: [], reportingOptions: [], attributeOptions: [.audioTimeRange])
+        if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+            try await request.downloadAndInstall()
+        }
+        let file = try AVAudioFile(forReading: url)
+        let results = Task {
+            for try await result in transcriber.results where result.isFinal {
+                let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                let start = result.range.start.seconds.isFinite ? result.range.start.seconds : 0
+                let end = result.range.end.seconds.isFinite ? result.range.end.seconds : start
+                await onSegment(TranscribedSegment(text: text, start: start, end: end))
+            }
+        }
+        let analyzer = try await SpeechAnalyzer(inputAudioFile: file, modules: [transcriber], finishAfterFile: true)
+        try await withTaskCancellationHandler {
+            try await results.value
+        } onCancel: {
+            results.cancel()
+            Task { await analyzer.cancelAndFinishNow() }
+        }
+    }
+}

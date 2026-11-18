@@ -27,12 +27,21 @@ private struct GeneralSettings: View {
     @AppStorage(SettingsKey.inputDeviceUID) private var inputUID = ""
     @AppStorage(SettingsKey.fontSize) private var fontSize = 16.0
     @AppStorage(SettingsKey.presentationFontSize) private var presentationFontSize = 44.0
+    @AppStorage(SettingsKey.transcriptMode) private var transcriptMode = TranscriptMode.detections
     @State private var locales: [Locale] = []
     @State private var devices: [AudioInputDevice] = []
 
     var body: some View {
         Form {
             Section("Transcription") {
+                Picker("Transcript", selection: $transcriptMode) {
+                    ForEach(TranscriptMode.allCases) { Text($0.title).tag($0) }
+                }
+                Text(transcriptMode == .detections
+                     ? "Speech is used only to find scripture and songs; the service shows their cards and section headers. The audio is saved, so you can generate the full transcript afterwards."
+                     : "Every word is shown and saved as it's spoken.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Picker("Language", selection: $localeID) {
                     if !locales.contains(where: { $0.identifier == localeID }) {
                         Text(Locale.current.localizedString(forIdentifier: localeID) ?? localeID).tag(localeID)

@@ -52,6 +52,11 @@ struct TranscribeApp: App {
     private static func makeContainer() -> ModelContainer {
         let schema = Schema([Session.self, TranscriptItem.self, StoredSong.self])
         #if DEBUG
+        if CommandLine.arguments.contains("-SoakSelfTest") {
+            // Its own store on disk, so saving is measured too, without touching the real library.
+            SoakSelfTest.removeStore()
+            return try! ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, url: SoakSelfTest.storeURL))
+        }
         if CommandLine.arguments.contains("-PipelineSelfTest") || CommandLine.arguments.contains("-PerformanceSelfTest") || CommandLine.arguments.contains("-OutputSelfTest") || CommandLine.arguments.contains("-UIScreenshots") {
             return try! ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
         }

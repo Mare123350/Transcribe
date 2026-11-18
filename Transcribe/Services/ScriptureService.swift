@@ -273,14 +273,14 @@ final class ScriptureService {
 
     /// Looks for a reference in the words still being spoken, so its card appears mid-sentence.
     /// Only confident, explicit references; the finished segment confirms or corrects it.
-    func processPartial(_ text: String, in session: Session) async {
+    func processPartial(_ text: String, in session: Session, at time: TimeInterval) async {
         guard text != lastPartial else { return }
         lastPartial = text
-        if let last = lastReference, session.duration - last.time > Self.contextWindow { lastReference = nil }
-        let found = detector.references(in: text, context: lastReference?.reference)
+        if let last = lastReference, time - last.time > Self.contextWindow { lastReference = nil }
+        let found = await detector.findReferences(in: text, context: lastReference?.reference)
             .filter { $0.confidence >= 0.75 && $0.form == .absolute }
         partialKeys = Set(found.map(\.reference.key))
-        let named = detector.namedVersion(in: text)
+        let named = await detector.findNamedVersion(in: text)
 
         // Every reference in a long sentence gets its own card as soon as it's said.
         for detection in found {
@@ -298,7 +298,7 @@ final class ScriptureService {
                 continue
             }
 
-            let item = TranscriptItem(kind: .verse, sortIndex: session.nextSortIndex, timestamp: session.duration)
+            let item = TranscriptItem(kind: .verse, sortIndex: session.nextSortIndex, timestamp: time)
             item.verseSource = .reference
             item.reference = reference.description
             item.referenceKey = reference.key
@@ -354,7 +354,7 @@ final class ScriptureService {
         let contextReference = lastReference?.reference
 
         // A reference can be split across two segments ("John chapter 3" … "verse 16").
-        var detections = detector.references(in: text, context: contextReference)
+        var detections = await detector.findReferences(in: text, context: contextReference)
         if UserDefaults.standard.object(forKey: SettingsKey.rewriteReferences) as? Bool ?? true {
             let rewritten = ReferenceParser.rewrite(text, references: detections)
             if rewritten != text {
@@ -363,8 +363,8 @@ final class ScriptureService {
             }
         }
         if let previous, time - previous.time < 8 {
-            let joined = detector.references(in: previous.text + " " + text, context: contextReference)
-            let alone = Set(detector.references(in: previous.text).map(\.reference.key))
+            let joined = await detector.findReferences(in: previous.text + " " + text, context: contextReference)
+            let alone = Set(await detector.findReferences(in: previous.text).map(\.reference.key))
             // Only references said across the break; relative ones were already read above.
             for detection in joined where detection.form == .absolute && !alone.contains(detection.reference.key) && !detections.contains(where: { $0.reference == detection.reference }) {
                 detections.append(detection)
@@ -374,7 +374,7 @@ final class ScriptureService {
         // A version named alongside a new reference belongs to that reference, not to earlier ones.
         await feedListeners(segment, namedVersionApplies: detections.isEmpty)
 
-        let named = detector.namedVersion(in: text)
+        let named = await detector.findNamedVersion(in: text)
         for detection in detections where detection.confidence >= 0.5 {
             await addReference(detection, after: segment, in: session, namedVersion: named)
         }
@@ -429,7 +429,7 @@ final class ScriptureService {
 
     private func feedListeners(_ segment: TranscriptItem, namedVersionApplies: Bool) async {
         let text = segment.text
-        let named = namedVersionApplies ? detector.namedVersion(in: text) : nil
+        let named: String? = if namedVersionApplies { await detector.findNamedVersion(in: text) } else { nil }
         for id in Array(listening.keys) {
             guard var state = listening[id] else { continue }
             if segment.timestamp - state.startedAt > Self.listenWindow {
@@ -445,7 +445,8 @@ final class ScriptureService {
                     segment.parentItemID = id
                     TranscriptLayout.invalidate(segment.session)
                     state.reading.append(text)
-                    if state.reading.count == 1, let session = segment.session { onPassageRead?(callout, session) }
+                    // The card's service: in "Scripture and songs only" the phrase isn't in one.
+                    if state.reading.count == 1, let session = callout.session { onPassageRead?(callout, session) }
                 }
             }
             listening[id] = state

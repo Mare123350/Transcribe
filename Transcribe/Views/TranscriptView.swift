@@ -13,12 +13,17 @@ struct TranscriptView: View {
     private static let bottomID = "transcript-bottom"
 
     var body: some View {
-        let layout = session.layout
+        // The batched layout: reading `session.layout` here would redraw for every phrase.
+        let layout = session.feed.layout
         let isLive = model.recorder.session === session && model.recorder.isActive
+        // In "Scripture and songs only" the listening line sits in a bar under the list rather than
+        // in it: its text changes several times a second, and inside the lazy stack every change
+        // made the stack measure its rows again.
+        let listeningBar = isLive && model.recorder.mode == .detections
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    TranscriptHeaderView(session: session)
+                    TranscriptHeaderView(session: session, isLive: isLive, hasPhrases: layout.rows.count > layout.headers.count + layout.songs.count + layout.verses.count)
                         .padding(.bottom, 8)
 
                     ForEach(layout.rows) { row in
@@ -26,7 +31,7 @@ struct TranscriptView: View {
                             .id(row.id)
                     }
 
-                    if isLive {
+                    if isLive && !listeningBar {
                         // Reads the in-progress text itself, so only this row redraws as words arrive.
                         VolatileRow()
                     }
@@ -50,11 +55,23 @@ struct TranscriptView: View {
                 userScrolling = phase == .interacting || phase == .tracking || phase == .decelerating
                 if userScrolling && !atBottom { followLive = false }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if listeningBar {
+                    VolatileRow()
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: 900, alignment: .leading)
+                        .frame(maxWidth: .infinity)
+                        .background(Color(nsColor: .textBackgroundColor))
+                }
+            }
+            // Following live. Not animated: an animated scroll in a lazy list measures the rows on
+            // every frame of the animation, which got slower with every card in a long service.
             .onChange(of: layout.ordered.count) {
-                if isLive && followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
+                if isLive && followLive { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
             }
             .background {
-                if isLive && followLive { FollowVolatileText(proxy: proxy, target: Self.bottomID) }
+                if isLive && followLive && !listeningBar { FollowVolatileText(proxy: proxy, target: Self.bottomID) }
             }
             .onChange(of: model.scrollTarget) {
                 guard let target = model.scrollTarget else { return }
@@ -87,8 +104,20 @@ struct TranscriptView: View {
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
-        .navigationTitle(session.title.isEmpty ? "Untitled" : session.title)
-        .navigationSubtitle(subtitle)
+        .modifier(SessionWindowTitle(session: session))
+    }
+}
+
+/// The window title and subtitle. Reads the duration and save time on its own, so their updates
+/// while recording don't rebuild the transcript.
+private struct SessionWindowTitle: ViewModifier {
+    let session: Session
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle(session.title.isEmpty ? "Untitled" : session.title)
+            .navigationSubtitle(subtitle)
     }
 
     private var subtitle: String {
@@ -102,6 +131,11 @@ struct TranscriptView: View {
 
 private struct TranscriptHeaderView: View {
     @Bindable var session: Session
+    let isLive: Bool
+    /// The service has transcribed phrases (not only cards and headers).
+    let hasPhrases: Bool
+    @Environment(AppModel.self) private var model
+    @State private var hasAudio = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -110,34 +144,89 @@ private struct TranscriptHeaderView: View {
                 .font(.largeTitle.bold())
             Text(session.createdAt.formatted(date: .complete, time: .shortened))
                 .foregroundStyle(.secondary)
+            if !isLive && !hasPhrases && hasAudio {
+                generateRow
+                    .padding(.top, Design.Space.s)
+            }
+        }
+        .task(id: "\(session.id)-\(isLive)") { hasAudio = ServiceAudio.hasAudio(for: session.id) }
+    }
+
+    /// Recorded with "Scripture and songs only": the words can be transcribed from the saved audio.
+    @ViewBuilder private var generateRow: some View {
+        let generator = model.transcriptGenerator
+        HStack(spacing: Design.Space.s) {
+            if let progress = generator.progress[session.id] {
+                ProgressView(value: progress)
+                    .frame(maxWidth: 220)
+                Text("Transcribing… \(Int(progress * 100))%")
+                    .font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                Button("Cancel") { generator.cancel(session) }
+                    .controlSize(.small)
+            } else {
+                Button {
+                    generator.generate(session, context: model.context)
+                } label: {
+                    Label("Generate Full Transcript", systemImage: "text.quote")
+                }
+                .help("Transcribe this service's saved audio and add every word between the cards")
+                if let error = generator.errors[session.id] {
+                    Text(error).font(.callout).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }
 
-/// Keeps the newest words in view as they arrive. Separate so the transcript itself doesn't
-/// re-render for every partial result.
+/// Keeps the newest words in view as they arrive (Full transcript). Separate so the transcript
+/// itself doesn't re-render for every partial result.
 private struct FollowVolatileText: View {
     let proxy: ScrollViewProxy
     let target: String
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        // Only when the live text may have wrapped onto another line.
         Color.clear
-            .onChange(of: model.recorder.volatileText) { proxy.scrollTo(target, anchor: .bottom) }
+            .onChange(of: model.recorder.volatileText.count / 60) { proxy.scrollTo(target, anchor: .bottom) }
     }
 }
 
-/// Text the speech model is still working on, shown in grey until it's finalized.
+/// Text the speech model is still working on, shown in grey until it's finalized. In "Scripture
+/// and songs only" it's one quiet line of the last few words heard, replacing itself.
 private struct VolatileRow: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let text = model.recorder.volatileText
+        if model.recorder.mode == .detections { listeningLine } else { volatileText }
+    }
+
+    // The symbols stay still: an animated symbol makes SwiftUI redraw and re-lay-out the window on
+    // the main thread every frame for the whole service. The toolbar meter shows it's listening.
+    private var listeningLine: some View {
+        let words = model.recorder.heardLine
         let paused = model.recorder.state == .paused
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: paused ? "pause.circle" : "waveform")
                 .foregroundStyle(.secondary)
-                .symbolEffect(.variableColor.iterative, isActive: !paused)
+                .frame(width: TimestampLabel.width, alignment: .trailing)
+            Text("\(Text(paused ? "Paused" : "Listening…").italic())\(words.isEmpty ? "" : "   " + words)")
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .truncationMode(.head)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .font(.callout)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(paused ? "Paused" : "Listening")
+    }
+
+    private var volatileText: some View {
+        let text = model.recorder.volatileText
+        let paused = model.recorder.state == .paused
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: paused ? "pause.circle" : "waveform")
+                .foregroundStyle(.secondary)
                 .frame(width: TimestampLabel.width, alignment: .trailing)
             Text(text.isEmpty ? (paused ? "Paused" : "Listening…") : text)
                 .foregroundStyle(.secondary)

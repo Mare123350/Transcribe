@@ -4,7 +4,7 @@ import Foundation
 /// True when the app was launched for a Debug self-test or screenshot tour: those runs must not
 /// change the operator's saved settings (recent items, auto-detect mode).
 let isSelfTestRun: Bool = {
-    let flags = ["-PipelineSelfTest", "-PerformanceSelfTest", "-OutputSelfTest", "-LiveSelfTest", "-UIScreenshots", "-LaunchTiming"]
+    let flags = ["-PipelineSelfTest", "-PerformanceSelfTest", "-SoakSelfTest", "-OutputSelfTest", "-LiveSelfTest", "-UIScreenshots", "-LaunchTiming"]
     return CommandLine.arguments.contains { flags.contains($0) }
 }()
 
@@ -32,6 +32,29 @@ enum SettingsKey {
     static let outputDisplay = "outputDisplayName"
     static let recentVerses = "recentVerses"
     static let recentItems = "recentScreenItems"
+    static let transcriptMode = "transcriptMode"
+}
+
+/// What a recording keeps of the words it hears.
+enum TranscriptMode: String, CaseIterable, Identifiable {
+    /// Speech is only used to find scripture and songs: the words are kept for about 30 seconds
+    /// and never shown in full or saved. The audio is saved, so a transcript can be made later.
+    case detections
+    /// Every word is shown and saved.
+    case full
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .detections: "Scripture and songs only"
+        case .full: "Full transcript"
+        }
+    }
+
+    static var current: TranscriptMode {
+        UserDefaults.standard.string(forKey: SettingsKey.transcriptMode).flatMap(TranscriptMode.init) ?? .detections
+    }
 }
 
 /// A permission the app needs but doesn't have, with guidance and a shortcut to System Settings.

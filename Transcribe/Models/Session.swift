@@ -46,7 +46,7 @@ final class Session {
     /// A sort index that places a new item directly before `item`.
     @MainActor func sortIndex(before item: TranscriptItem) -> Double {
         let ordered = layout.ordered
-        guard let index = ordered.firstIndex(where: { $0 === item }) else { return item.sortIndex - 0.5 }
+        guard let index = ordered.firstIndex(where: { $0 === item }) else { return sortIndex(at: item.timestamp, after: false) }
         let previous = index > 0 ? ordered[index - 1].sortIndex : item.sortIndex - 1
         return (previous + item.sortIndex) / 2
     }
@@ -54,9 +54,33 @@ final class Session {
     /// A sort index that places a new item directly after `item`.
     @MainActor func sortIndex(after item: TranscriptItem) -> Double {
         let ordered = layout.ordered
-        guard let index = ordered.lastIndex(where: { $0 === item }) else { return item.sortIndex + 0.5 }
+        guard let index = ordered.lastIndex(where: { $0 === item }) else { return sortIndex(at: item.timestamp, after: true) }
         let next = index + 1 < ordered.count ? ordered[index + 1].sortIndex : item.sortIndex + 1
         return (item.sortIndex + next) / 2
+    }
+
+    /// For a phrase that isn't in the service ("Scripture and songs only"): a sort index that
+    /// places the new item by time among the cards and headers that are, before items at the
+    /// same time or (`after`) after them.
+    @MainActor private func sortIndex(at time: TimeInterval, after: Bool) -> Double {
+        let top = layout.rows.map(\.item)
+        // Usually at or near the end: search from there.
+        var index = top.count
+        while index > 0, after ? top[index - 1].timestamp > time : top[index - 1].timestamp >= time { index -= 1 }
+        let previous = index > 0 ? top[index - 1].sortIndex : (top.first?.sortIndex ?? 1) - 1
+        // Between this row and the next one in the full order (which may be a folded child).
+        let ordered = layout.ordered
+        let next: Double
+        if index > 0, let position = ordered.lastIndex(where: { $0 === top[index - 1] }) {
+            var after = position + 1
+            while after < ordered.count, ordered[after].parentItemID == top[index - 1].id { after += 1 }
+            let lastChild = ordered[position..<after].last?.sortIndex ?? previous
+            let following = after < ordered.count ? ordered[after].sortIndex : lastChild + 1
+            return (lastChild + following) / 2
+        } else {
+            next = top.first?.sortIndex ?? previous + 2
+        }
+        return (previous + next) / 2
     }
 
     static func defaultTitle(for date: Date = .now) -> String {
@@ -214,4 +238,66 @@ struct SetListItem: Codable, Hashable, Identifiable {
     var kind: Kind
     /// Shown in the list: the song title or the reference.
     var title: String
+}
+
+/// What views show of a transcript: its layout, refreshed at most about three times a second.
+///
+/// Views read `layout` here instead of `session.layout`. Reading the session's items inside a
+/// view makes SwiftUI rebuild that view, the whole transcript and the inspector included, for
+/// every phrase added. The feed watches the items itself, outside any view, and publishes a new
+/// layout in batches.
+@MainActor
+@Observable
+final class TranscriptFeed {
+    private(set) var layout: TranscriptLayout
+    @ObservationIgnored private weak var session: Session?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var lastRefresh = ContinuousClock.now
+
+    static let interval: Duration = .milliseconds(300)
+    private static var feeds: [ObjectIdentifier: TranscriptFeed] = [:]
+
+    /// The feed for `session`, made on first use.
+    static func `for`(_ session: Session) -> TranscriptFeed {
+        // A deleted session's address can be reused by a new one: check it's the same object.
+        if let feed = feeds[ObjectIdentifier(session)], feed.session === session { return feed }
+        let feed = TranscriptFeed(session)
+        feeds[ObjectIdentifier(session)] = feed
+        return feed
+    }
+
+    private init(_ session: Session) {
+        self.session = session
+        layout = session.layout
+        watch()
+    }
+
+    private func watch() {
+        guard let session else { return }
+        withObservationTracking {
+            _ = session.items.count
+            _ = LayoutRevisions.shared.revision(of: session)
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.scheduleRefresh() }
+        }
+    }
+
+    private func scheduleRefresh() {
+        guard refreshTask == nil else { return }
+        refreshTask = Task { [weak self] in
+            guard let self else { return }
+            let wait = self.lastRefresh + Self.interval - ContinuousClock.now
+            if wait > .zero { try? await Task.sleep(for: wait) }
+            self.refreshTask = nil
+            self.lastRefresh = .now
+            guard let session = self.session, !session.isDeleted else { return }
+            self.layout = session.layout
+            self.watch()
+        }
+    }
+}
+
+extension Session {
+    /// The transcript layout for views: batched, see `TranscriptFeed`.
+    @MainActor var feed: TranscriptFeed { TranscriptFeed.for(self) }
 }

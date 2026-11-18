@@ -10,7 +10,7 @@ struct PresentationView: View {
 
     var body: some View {
         let session = model.recorder.isActive ? model.recorder.session : model.selectedSession
-        let items = Array((session?.orderedItems ?? []).filter { $0.parentItemID == nil }.suffix(8))
+        let items = Array((session?.feed.layout.topLevel ?? []).suffix(8))
 
         ZStack(alignment: .bottomLeading) {
             Color.black.ignoresSafeArea()

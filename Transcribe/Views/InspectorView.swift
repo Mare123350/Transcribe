@@ -6,9 +6,6 @@ struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let layout = session.layout
-        let headers = layout.headers, songs = layout.songs, verses = layout.verses
-
         List {
             Section("Screen") {
                 VerseEntryView()
@@ -30,6 +27,24 @@ struct InspectorView: View {
                     }
                 }
             }
+            JumpSections(session: session)
+        }
+        .listStyle(.sidebar)
+        // Hints and labels here wrap instead of being cut off.
+        .lineLimit(nil)
+    }
+}
+
+/// Every header, song and verse in the service, to jump to. Reads the batched transcript layout,
+/// so the rest of the inspector (the Screen panel) doesn't redraw as phrases arrive.
+private struct JumpSections: View {
+    let session: Session
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let layout = session.feed.layout
+        let headers = layout.headers, songs = layout.songs, verses = layout.verses
+        Group {
             Section("Sections") {
                 if headers.isEmpty { emptyRow("Headers appear as the service moves on.") }
                 ForEach(headers) { item in
@@ -79,21 +94,10 @@ struct InspectorView: View {
                 }
             }
         }
-        .listStyle(.sidebar)
-        // Hints and labels here wrap instead of being cut off.
-        .lineLimit(nil)
     }
 
     private func jumpRow<Content: View>(_ item: TranscriptItem, @ViewBuilder content: () -> Content) -> some View {
-        Button { model.scrollTarget = item.id } label: {
-            HStack(alignment: .firstTextBaseline) {
-                content()
-                Spacer()
-                Text(TimeFormat.clock(item.timestamp)).font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        JumpRow(item: item, content: content())
     }
 
     private func emptyRow(_ text: String) -> some View {
@@ -105,6 +109,26 @@ struct InspectorView: View {
         if item.versionNamedBySpeaker { return "\(item.versionAbbreviation) · named by speaker" }
         if item.verseSource == .manual { return item.versionAbbreviation }
         return "\(item.versionAbbreviation) · \(Int(item.confidence * 100))%"
+    }
+}
+
+/// One row to jump to. Its own view, so SwiftUI skips rows whose item hasn't changed when a new
+/// card arrives instead of rebuilding hundreds of them in a long service.
+private struct JumpRow<Content: View>: View {
+    let item: TranscriptItem
+    let content: Content
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button { model.scrollTarget = item.id } label: {
+            HStack(alignment: .firstTextBaseline) {
+                content
+                Spacer()
+                Text(TimeFormat.clock(item.timestamp)).font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

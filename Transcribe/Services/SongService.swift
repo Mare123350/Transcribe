@@ -106,14 +106,16 @@ final class SongService {
 
     /// Feeds one finalized segment. Returns true if it was sung (and folded under a song).
     @discardableResult
-    func process(_ segment: TranscriptItem, in session: Session) -> Bool {
+    func process(_ segment: TranscriptItem, in session: Session) async -> Bool {
         guard !matcher.isEmpty else { return false }
         let tokens = TextNormalizer.tokens(segment.text)
         window = Array((window + tokens).suffix(SongMatcher.windowSize))
         recentSegments = Array((recentSegments + [(segment.id, tokens)]).suffix(8))
 
         tracker.startThreshold = UserDefaults.standard.object(forKey: SettingsKey.songThreshold) as? Double ?? 0.55
-        let match = matcher.match(window: window)
+        // Matching runs off the main thread; the library can be large.
+        let matcher = self.matcher, window = self.window
+        let match = await Task.detached(priority: .userInitiated) { matcher.match(window: window) }.value
         if let match { recentMatches = Array((recentMatches + [match]).suffix(4)) }
         var sung = false
         for event in tracker.update(match, at: now) {

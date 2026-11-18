@@ -19,9 +19,11 @@ final class SectionService {
 
     private var buffer = ""
     private var bufferWords = 0
-    private var bufferSegmentIDs: [UUID] = []
+    /// The phrases in the buffer. Held directly: in "Scripture and songs only" they're never
+    /// saved, so they can't be looked up later.
+    private var bufferSegments: [TranscriptItem] = []
     /// A change seen once, waiting for a second chunk to agree.
-    private var pending: (kind: ServiceSectionKind, segmentIDs: [UUID], title: String)?
+    private var pending: (kind: ServiceSectionKind, segments: [TranscriptItem], title: String)?
     private var sermonHeaderID: UUID?
     private var sermonText = ""
     private var sermonTitleRequested = false
@@ -40,7 +42,7 @@ final class SectionService {
     func reset() {
         buffer = ""
         bufferWords = 0
-        bufferSegmentIDs = []
+        bufferSegments = []
         pending = nil
         sermonHeaderID = nil
         sermonText = ""
@@ -52,21 +54,21 @@ final class SectionService {
 
     func process(_ segment: TranscriptItem, in session: Session) async {
         guard isEnabled else { return }
-        bufferSegmentIDs.append(segment.id)
+        bufferSegments.append(segment)
         buffer += (buffer.isEmpty ? "" : " ") + segment.text
         bufferWords += segment.text.split(separator: " ").count
 
-        if currentSection(in: session) == .sermon {
+        if currentSection(in: session) == .sermon, !sermonTitleRequested {
             sermonText += " " + segment.text
             await maybeTitleSermon(in: session)
         }
 
         guard bufferWords >= Self.chunkWords else { return }
         let text = buffer
-        let chunk = bufferSegmentIDs
+        let chunk = bufferSegments
         buffer = ""
         bufferWords = 0
-        bufferSegmentIDs = []
+        bufferSegments = []
 
         await classify(text, chunk: chunk, in: session)
     }
@@ -75,20 +77,20 @@ final class SectionService {
     func flush(in session: Session) async {
         guard isEnabled, bufferWords >= 8 else { return }
         let text = buffer
-        let chunk = bufferSegmentIDs
+        let chunk = bufferSegments
         buffer = ""
         bufferWords = 0
-        bufferSegmentIDs = []
+        bufferSegments = []
         await classify(text, chunk: chunk, in: session)
     }
 
-    private func classify(_ text: String, chunk: [UUID], in session: Session) async {
+    private func classify(_ text: String, chunk: [TranscriptItem], in session: Session) async {
         let current = currentSection(in: session)
         let decision = await classifier.classify(text, previous: current)
         await apply(decision, chunk: chunk, current: current, in: session)
 
         // The chunk's last line may already start the next section ("…envelopes. Go in peace.").
-        if chunk.count >= 2, let last = chunk.last.flatMap(item) {
+        if chunk.count >= 2, let last = chunk.last {
             let cue = KeywordSectionClassifier.classify(last.text)
             if cue.confidence >= 0.75, cue.kind != currentSection(in: session) {
                 insertHeader(cue.kind, title: "", before: last, in: session, confidence: cue.confidence)
@@ -117,7 +119,7 @@ final class SectionService {
         pending = nil
     }
 
-    private func apply(_ decision: SectionDecision, chunk: [UUID], current: ServiceSectionKind?, in session: Session) async {
+    private func apply(_ decision: SectionDecision, chunk: [TranscriptItem], current: ServiceSectionKind?, in session: Session) async {
         guard decision.kind != current else {
             pending = nil
             return
@@ -132,7 +134,7 @@ final class SectionService {
             return
         }
         // When two chunks agreed, the section started somewhere in the first of them.
-        let candidates = confirmed ? (pending?.segmentIDs ?? []) + chunk : chunk
+        let candidates = confirmed ? (pending?.segments ?? []) + chunk : chunk
         let title = decision.suggestedTitle.isEmpty ? (pending?.title ?? "") : decision.suggestedTitle
         pending = nil
         guard let start = await firstSegment(of: decision.kind, among: candidates) else { return }
@@ -142,8 +144,8 @@ final class SectionService {
     /// A chunk can straddle two sections ("…see you at the picnic. Let's pray."). Find the segment
     /// where `kind` begins: by its telltale phrases if it has any, otherwise by asking the classifier
     /// about each line. Falls back to the start of the chunk.
-    private func firstSegment(of kind: ServiceSectionKind, among ids: [UUID]) async -> TranscriptItem? {
-        let segments = ids.compactMap(item).filter { $0.parentItemID == nil || $0.kind == .segment }
+    private func firstSegment(of kind: ServiceSectionKind, among candidates: [TranscriptItem]) async -> TranscriptItem? {
+        let segments = candidates.filter { !$0.isDeleted && ($0.parentItemID == nil || $0.kind == .segment) }
         guard segments.count > 1 else { return segments.first }
         for segment in segments {
             let cue = KeywordSectionClassifier.classify(segment.text)
