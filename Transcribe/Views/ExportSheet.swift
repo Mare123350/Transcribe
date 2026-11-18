@@ -17,7 +17,7 @@ struct ExportSheet: View {
     private var intelligence: IntelligenceStatus { .current }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Design.Space.l) {
             Text("Export “\(session.title)”").font(.title2.bold())
             Form {
                 Picker("Format", selection: $formatRaw) {
@@ -38,11 +38,11 @@ struct ExportSheet: View {
                 .font(.caption).foregroundStyle(.secondary)
 
             if let errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle").foregroundStyle(.red).font(.callout)
+                Label(errorMessage, systemImage: "exclamationmark.triangle").foregroundStyle(Design.Palette.error).font(.callout)
             }
             if let savedURL {
                 HStack {
-                    Label("Saved \(savedURL.lastPathComponent)", systemImage: "checkmark.circle").foregroundStyle(.green)
+                    Label("Saved \(savedURL.lastPathComponent)", systemImage: "checkmark.circle").foregroundStyle(Design.Palette.good)
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([savedURL]) }
                 }
                 .font(.callout)
@@ -61,8 +61,8 @@ struct ExportSheet: View {
                     .disabled(working)
             }
         }
-        .padding(20)
-        .frame(width: 520)
+        .padding(Design.Layout.sheetPadding)
+        .frame(width: Design.Layout.sheetWidth)
     }
 
     private func export() async {

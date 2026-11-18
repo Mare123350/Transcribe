@@ -124,7 +124,7 @@ private struct JumpRow<Content: View>: View {
             HStack(alignment: .firstTextBaseline) {
                 content
                 Spacer()
-                Text(TimeFormat.clock(item.timestamp)).font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+                Text(TimeFormat.clock(item.timestamp)).font(Design.Typography.timestamp).foregroundStyle(.tertiary)
             }
             .contentShape(Rectangle())
         }
@@ -149,7 +149,7 @@ private struct SetListSection: View {
             ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
                 Button { Task { await model.output.previewOnly(model.source(for: item)) } } label: {
                     HStack(spacing: Design.Space.s) {
-                        Text("\(index + 1)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary).frame(width: 16, alignment: .trailing)
+                        Text("\(index + 1)").font(Design.Typography.timestamp).foregroundStyle(.tertiary).frame(width: 16, alignment: .trailing)
                         Image(systemName: isSong(item) ? "music.note" : "book.closed")
                             .foregroundStyle(isSong(item) ? Design.Palette.song : Design.Palette.scripture)
                         Text(item.title).lineLimit(1)

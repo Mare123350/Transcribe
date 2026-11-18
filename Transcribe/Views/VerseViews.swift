@@ -13,9 +13,9 @@ struct VerseCalloutView: View {
     @State private var showSpoken = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Design.Space.m) {
             TimestampLabel(seconds: item.timestamp)
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Design.Space.s) {
                 header
                 if needsConfirmation { confirmationBar }
 
@@ -51,11 +51,11 @@ struct VerseCalloutView: View {
                     }
                 }
             }
-            .padding(14)
+            .padding(Design.Layout.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            .background(Design.Palette.scripture.opacity(Design.Opacity.wash), in: RoundedRectangle(cornerRadius: Design.Radius.medium))
             .overlay(alignment: .leading) {
-                UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10).fill(.orange).frame(width: 4)
+                UnevenRoundedRectangle(topLeadingRadius: Design.Radius.medium, bottomLeadingRadius: Design.Radius.medium).fill(Design.Palette.scripture).frame(width: Design.Layout.cardStripe)
             }
         }
         .contextMenu { menuItems }
@@ -63,8 +63,8 @@ struct VerseCalloutView: View {
 
     /// "NIV requested, showing KJV" with a way to get NIV.
     private var requestedBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "info.circle").foregroundStyle(.orange)
+        HStack(spacing: Design.Space.s) {
+            Image(systemName: "info.circle").foregroundStyle(Design.Palette.scripture)
             Text("\(item.requestedVersion) requested, showing \(item.versionAbbreviation)")
                 .font(.caption.weight(.medium))
             Spacer()
@@ -82,9 +82,9 @@ struct VerseCalloutView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Design.Space.s) {
             Image(systemName: item.verseSource == .quote ? "quote.opening" : "book.closed.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Design.Palette.scripture)
             Text(item.reference)
                 .font(.headline)
             Text("—").foregroundStyle(.tertiary)
@@ -132,8 +132,8 @@ struct VerseCalloutView: View {
     }
 
     private var confirmationBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "questionmark.circle").foregroundStyle(.orange)
+        HStack(spacing: Design.Space.s) {
+            Image(systemName: "questionmark.circle").foregroundStyle(Design.Palette.scripture)
             Text(item.verseSource == .quote ? "Recognized from the wording." : (item.referenceNote.isEmpty ? "Please confirm." : item.referenceNote))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -145,7 +145,7 @@ struct VerseCalloutView: View {
             Button("Confirm") { item.status = .confirmed }
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .tint(Design.Palette.scripture)
             Button("Dismiss") { model.scripture.remove(item) }
                 .controlSize(.small)
         }
@@ -177,7 +177,7 @@ struct InsertVerseSheet: View {
     private var parsed: DetectedReference? { ReferenceParser.parseManual(text) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Design.Space.l) {
             Text("Insert Verse").font(.title2.bold())
             HStack {
                 TextField("Reference, e.g. John 3:16 or 1 Cor 13:4-7", text: $text)
@@ -191,7 +191,7 @@ struct InsertVerseSheet: View {
             }
             Group {
                 if let parsed {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Design.Space.xs) {
                         Text(parsed.reference.description).font(.headline)
                         Text(preview.isEmpty ? "Not found in \(abbreviation)." : preview)
                             .font(.system(.body, design: .serif))
@@ -212,8 +212,8 @@ struct InsertVerseSheet: View {
                     .disabled(parsed == nil)
             }
         }
-        .padding(20)
-        .frame(width: 520)
+        .padding(Design.Layout.sheetPadding)
+        .frame(width: Design.Layout.sheetWidth)
         .onAppear { abbreviation = model.scripture.defaultAbbreviation }
         .task(id: "\(text)|\(abbreviation)") {
             guard let parsed else { preview = ""; return }
@@ -238,11 +238,11 @@ struct SendToScreenButtons: View {
 
     var body: some View {
         let isLive = model.output.live?.source == source
-        HStack(spacing: 4) {
+        HStack(spacing: Design.Space.xs) {
             if isLive {
                 Label("Live", systemImage: "dot.radiowaves.left.and.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.red)
+                    .font(Design.Typography.label)
+                    .foregroundStyle(Design.Palette.live)
             }
             Button { Task { await model.output.showInPreview(source) } } label: {
                 Image(systemName: "eye")

@@ -181,7 +181,7 @@ struct RecordPillStyle: ButtonStyle {
             .foregroundStyle(tint == nil ? Color.primary : Color.white)
             .padding(.horizontal, Design.Space.s)
             .padding(.vertical, Design.Space.xs)
-            .background(Capsule().fill(tint ?? Color.primary.opacity(0.08)))
+            .background(Capsule().fill(tint ?? Color.primary.opacity(Design.Opacity.wash)))
             .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.5)
             .contentShape(Capsule())
     }

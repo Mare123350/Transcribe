@@ -90,7 +90,7 @@ struct VerseEntryView: View {
         }
         .padding(Design.Space.s)
         .background(.background, in: RoundedRectangle(cornerRadius: Design.Radius.small))
-        .overlay(RoundedRectangle(cornerRadius: Design.Radius.small).strokeBorder(focused ? Color.accentColor : Color.secondary.opacity(0.3)))
+        .overlay(RoundedRectangle(cornerRadius: Design.Radius.small).strokeBorder(focused ? Color.accentColor : Color.secondary.opacity(Design.Opacity.border)))
     }
 
     @ViewBuilder private var resultsList: some View {
@@ -109,7 +109,7 @@ struct VerseEntryView: View {
                 if let exact {
                     groupLabel("Scripture")
                     row(selected: selection == 0) {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Design.Space.xxs) {
                             Text("\(exact.description) · \(version)").font(.callout.weight(.semibold))
                             Text(verseText.isEmpty ? "Not in \(version)." : verseText)
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -121,11 +121,11 @@ struct VerseEntryView: View {
                     ForEach(Array(songs.enumerated()), id: \.element.song.id) { index, match in
                         let position = index + (exact == nil ? 0 : 1)
                         row(selected: selection == position) {
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: Design.Space.xxs) {
                                 HStack(spacing: Design.Space.xs) {
                                     Image(systemName: "music.note").foregroundStyle(Design.Palette.song)
                                     Text(match.song.title).font(.callout.weight(.semibold)).lineLimit(1)
-                                    if match.song.isFavorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(.yellow) }
+                                    if match.song.isFavorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(Design.Palette.favorite) }
                                 }
                                 Text(subtitle(match))
                                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -160,7 +160,7 @@ struct VerseEntryView: View {
     }
 
     private func groupLabel(_ title: String) -> some View {
-        Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+        Text(title).font(Design.Typography.label).foregroundStyle(.secondary).textCase(.uppercase)
             .padding(.top, Design.Space.xs)
     }
 
@@ -170,7 +170,7 @@ struct VerseEntryView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Design.Space.s)
                 .padding(.vertical, Design.Space.xs)
-                .background(selected ? Color.accentColor.opacity(0.15) : Color.clear, in: RoundedRectangle(cornerRadius: Design.Radius.small))
+                .background(selected ? Design.Palette.accent.opacity(Design.Opacity.tint) : Color.clear, in: RoundedRectangle(cornerRadius: Design.Radius.small))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -223,7 +223,7 @@ private struct RecentList: View {
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: Design.Space.xxs) {
-                Text("Recent").font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+                Text("Recent").font(Design.Typography.label).foregroundStyle(.secondary).textCase(.uppercase)
                 ForEach(recents) { item in
                     Button { Task { await model.output.previewOnly(source(item)) } } label: {
                         HStack(spacing: Design.Space.xs) {
@@ -233,7 +233,7 @@ private struct RecentList: View {
                             if case .verse(_, let version) = item { Text(version).foregroundStyle(.secondary) }
                         }
                         .font(.callout)
-                        .padding(.vertical, 2)
+                        .padding(.vertical, Design.Space.xxs)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

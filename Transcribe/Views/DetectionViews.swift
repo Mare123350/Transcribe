@@ -12,11 +12,11 @@ struct SongBlockView: View {
     @State private var showSung = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Design.Space.m) {
             TimestampLabel(seconds: item.timestamp)
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "music.note").foregroundStyle(.purple)
+            VStack(alignment: .leading, spacing: Design.Space.m) {
+                HStack(alignment: .firstTextBaseline, spacing: Design.Space.s) {
+                    Image(systemName: "music.note").foregroundStyle(Design.Palette.song)
                     Text("Song: \(item.title)").font(.headline)
                     if !item.artist.isEmpty {
                         Text(item.artist).font(.subheadline).foregroundStyle(.secondary)
@@ -24,7 +24,7 @@ struct SongBlockView: View {
                     Spacer()
                     if item.status == .detected {
                         Text("\(Int(item.confidence * 100))% match")
-                            .font(.caption.monospacedDigit())
+                            .font(Design.Typography.timestamp)
                             .foregroundStyle(.secondary)
                     }
                     if let last = item.lyricSections.last {
@@ -33,11 +33,11 @@ struct SongBlockView: View {
                 }
 
                 ForEach(Array(item.lyricSections.enumerated()), id: \.offset) { _, section in
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Design.Space.xxs) {
                         if !section.name.isEmpty {
                             Text(section.name)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.purple)
+                                .font(Design.Typography.label)
+                                .foregroundStyle(Design.Palette.song)
                                 .textCase(.uppercase)
                         }
                         Text(section.lyrics)
@@ -56,7 +56,7 @@ struct SongBlockView: View {
 
                 if !sungSegments.isEmpty {
                     DisclosureGroup(isExpanded: $showSung) {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: Design.Space.xs) {
                             ForEach(sungSegments) { segment in
                                 Text(segment.text).font(.callout).foregroundStyle(.secondary)
                             }
@@ -68,11 +68,11 @@ struct SongBlockView: View {
                     }
                 }
             }
-            .padding(14)
+            .padding(Design.Layout.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+            .background(Design.Palette.song.opacity(Design.Opacity.wash), in: RoundedRectangle(cornerRadius: Design.Radius.medium))
             .overlay(alignment: .leading) {
-                UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10).fill(.purple).frame(width: 4)
+                UnevenRoundedRectangle(topLeadingRadius: Design.Radius.medium, bottomLeadingRadius: Design.Radius.medium).fill(Design.Palette.song).frame(width: Design.Layout.cardStripe)
             }
         }
         .contextMenu {
@@ -91,24 +91,24 @@ struct DetectedSongChip: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Design.Space.s) {
             Image(systemName: "music.note")
-                .foregroundStyle(.purple)
+                .foregroundStyle(Design.Palette.song)
             Text("Detected: **\(item.title)** (\(Int(item.confidence * 100))%)")
                 .lineLimit(1)
             Button("Confirm") { model.songs.confirm(item) }
                 .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                .tint(Design.Palette.song)
             SongPickerMenu(title: "Change") { model.songs.change(item, to: $0) }
                 .fixedSize()
             Button { model.songs.dismiss(item) } label: { Image(systemName: "xmark") }
                 .help("Not a song: restore the transcript")
         }
         .controlSize(.small)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Design.Space.m)
+        .padding(.vertical, Design.Space.s)
         .background(.regularMaterial, in: Capsule())
-        .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+        .floatingShadow()
     }
 }
 

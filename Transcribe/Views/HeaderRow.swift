@@ -8,8 +8,8 @@ struct HeaderRow: View {
     @FocusState private var titleFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Design.Space.xxs) {
+            HStack(spacing: Design.Space.s) {
                 Menu {
                     ForEach(ServiceSection.allCases) { section in
                         Button { setType(section) } label: { Label(section.title, systemImage: section.symbol) }
@@ -32,8 +32,8 @@ struct HeaderRow: View {
                 if item.isAutomatic && !item.isUserEdited {
                     Text("Auto")
                         .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
+                        .padding(.horizontal, Design.Space.xs)
+                        .padding(.vertical, Design.Space.xxs / 2)
                         .background(.quaternary, in: Capsule())
                         .foregroundStyle(.secondary)
                         .help(item.confidence > 0 ? "Added automatically (\(Int(item.confidence * 100))% sure)" : "Added automatically")
@@ -45,11 +45,11 @@ struct HeaderRow: View {
                 .textFieldStyle(.plain)
                 .font(.headline)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 28)
+                .padding(.leading, 28) // design: fixed — lines the subheader up with the title after the icon
                 .opacity(item.subtitle.isEmpty && !titleFocused ? 0.5 : 1)
-            Divider().padding(.top, 4)
+            Divider().padding(.top, Design.Space.xs)
         }
-        .padding(.top, 14)
+        .padding(.top, Design.Space.l)
         .onAppear { if model.focusHeaderID == item.id { titleFocused = true; model.focusHeaderID = nil } }
         .contextMenu {
             Menu("Section Type") {

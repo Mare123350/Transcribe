@@ -1,7 +1,11 @@
 import SwiftUI
 
-/// One set of spacing, corner radii and semantic colours for the whole app.
+/// The operator window's tokens: spacing, layout, radii, colour, type, elevation and motion.
+/// Views use these instead of literal numbers and colours (`Tools/lint_design.sh` checks).
+/// The output slide canvas and the presentation window are exempt: their sizes scale with the
+/// theme's font size on a 1920×1080 canvas, not with this scale.
 enum Design {
+    /// A 4-point scale. Stack spacing and padding come from here.
     enum Space {
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4
@@ -12,13 +16,32 @@ enum Design {
         static let xxl: CGFloat = 32
     }
 
+    /// Measurements of containers rather than gaps between things.
+    enum Layout {
+        /// Inside a song or verse card.
+        static let cardPadding: CGFloat = 14
+        /// The coloured bar on the leading edge of a song or verse card.
+        static let cardStripe: CGFloat = 4
+        /// Left and right margin of the transcript.
+        static let pageGutter: CGFloat = 28
+        /// The transcript's line length stays readable on a wide window.
+        static let readingWidth: CGFloat = 900
+        /// Settings-style sheets.
+        static let sheetWidth: CGFloat = 520
+        static let sheetPadding: CGFloat = 20
+    }
+
+    /// Concentric where nested: a control inside a card uses `small`.
     enum Radius {
         static let small: CGFloat = 6
         static let medium: CGFloat = 10
         static let large: CGFloat = 14
     }
 
+    /// Category colours carry meaning (orange is scripture, purple is song, red is live);
+    /// everything else uses the system accent and greys.
     enum Palette {
+        static let accent = Color.accentColor
         static let scripture = Color.orange
         static let song = Color.purple
         static let live = Color.red
@@ -26,10 +49,55 @@ enum Design {
         static let paused = Color(nsColor: .systemOrange)
         static let warning = Color(nsColor: .systemOrange)
         static let good = Color.green
+        static let error = Color.red
+        static let favorite = Color.yellow
+    }
+
+    /// The few strengths a tint or border is used at.
+    enum Opacity {
+        /// A card or panel washed with its category colour.
+        static let wash = 0.08
+        /// A selected row or a highlighted state.
+        static let tint = 0.14
+        /// Hairline borders in secondary grey.
+        static let border = 0.35
+        /// Text or a focus ring that should recede.
+        static let muted = 0.6
+    }
+
+    /// The type roles used across the operator window, on top of the system text styles.
+    enum Typography {
+        /// A small label over a group ("Preview", "Recent", a song's "Chorus").
+        static let label = Font.caption.weight(.semibold)
+        /// Times and counts that change while you watch, so the digits don't jitter.
+        static let timestamp = Font.caption.monospacedDigit()
+        /// The icon at the top of an empty state.
+        static let emptyIcon = Font.system(size: 36)
+    }
+
+    /// Elevation. Only things that float over content get a shadow.
+    enum Elevation {
+        static let floatingColor = Color.black.opacity(0.12)
+        static let floatingRadius: CGFloat = 6
+        static let floatingY: CGFloat = 2
+    }
+
+    /// Short and purposeful: ease-out for things arriving, nothing over 300 ms.
+    enum Motion {
+        /// A banner or row arriving.
+        static let enter = Animation.easeOut(duration: 0.22)
+        /// A cross-fade; also what Reduce Motion falls back to.
+        static let fade = Animation.easeOut(duration: 0.15)
+        /// Scrolling to a place the user asked for.
+        static let scroll = Animation.easeInOut(duration: 0.25)
+        /// How a slide moves from Preview to Live.
+        static let slide = Animation.snappy(duration: 0.28)
+        /// How far a custom button shrinks while pressed.
+        static let pressScale: CGFloat = 0.97
     }
 
     /// How a slide moves from Preview to Live.
-    static let slideAnimation = Animation.snappy(duration: 0.28)
+    static let slideAnimation = Motion.slide
 
     /// Toolbar density for the transcript column's width, so nothing truncates or overflows.
     enum ToolbarDensity {
@@ -37,5 +105,12 @@ enum Design {
         init(detailWidth: CGFloat) {
             self = detailWidth >= 1000 ? .full : detailWidth >= 760 ? .medium : .narrow
         }
+    }
+}
+
+extension View {
+    /// The shadow for something floating over content, like the detected-song banner.
+    func floatingShadow() -> some View {
+        shadow(color: Design.Elevation.floatingColor, radius: Design.Elevation.floatingRadius, y: Design.Elevation.floatingY)
     }
 }

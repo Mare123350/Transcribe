@@ -22,9 +22,9 @@ struct TranscriptView: View {
         let listeningBar = isLive && model.recorder.mode == .detections
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
+                LazyVStack(alignment: .leading, spacing: Design.Space.m) {
                     TranscriptHeaderView(session: session, isLive: isLive, hasPhrases: layout.rows.count > layout.headers.count + layout.songs.count + layout.verses.count)
-                        .padding(.bottom, 8)
+                        .padding(.bottom, Design.Space.s)
 
                     ForEach(layout.rows) { row in
                         TranscriptItemRow(item: row.item, session: session, children: layout.children[row.id] ?? [])
@@ -38,9 +38,9 @@ struct TranscriptView: View {
                     Color.clear.frame(height: 1).id(Self.bottomID)
                 }
                 .font(.system(size: fontSize))
-                .padding(.horizontal, 28)
-                .padding(.vertical, 20)
-                .frame(maxWidth: 900, alignment: .leading)
+                .padding(.horizontal, Design.Layout.pageGutter)
+                .padding(.vertical, Design.Space.xl)
+                .frame(maxWidth: Design.Layout.readingWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
             // Scrolling up yourself pauses following the live text; scrolling back down resumes it.
@@ -58,9 +58,9 @@ struct TranscriptView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if listeningBar {
                     VolatileRow()
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: 900, alignment: .leading)
+                        .padding(.horizontal, Design.Layout.pageGutter)
+                        .padding(.vertical, Design.Space.s)
+                        .frame(maxWidth: Design.Layout.readingWidth, alignment: .leading)
                         .frame(maxWidth: .infinity)
                         .background(Color(nsColor: .textBackgroundColor))
                 }
@@ -76,22 +76,22 @@ struct TranscriptView: View {
             .onChange(of: model.scrollTarget) {
                 guard let target = model.scrollTarget else { return }
                 followLive = false
-                withAnimation { proxy.scrollTo(target, anchor: .top) }
+                withAnimation(Design.Motion.scroll) { proxy.scrollTo(target, anchor: .top) }
                 model.scrollTarget = nil
             }
             .overlay(alignment: .top) {
                 if let id = model.songs.pendingItemID, let pending = layout.songs.last(where: { $0.id == id }), pending.status == .detected {
                     DetectedSongChip(item: pending)
-                        .padding(.top, 10)
+                        .padding(.top, Design.Space.s)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            .animation(.snappy, value: model.songs.pendingItemID)
+            .animation(Design.Motion.enter, value: model.songs.pendingItemID)
             .overlay(alignment: .bottomTrailing) {
                 if isLive && !followLive {
                     Button {
                         followLive = true
-                        withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+                        withAnimation(Design.Motion.scroll) { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
                     } label: {
                         Label("Jump to Live", systemImage: "arrow.down.to.line")
                     }
@@ -138,7 +138,7 @@ private struct TranscriptHeaderView: View {
     @State private var hasAudio = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Design.Space.xs) {
             TextField("Session title", text: $session.title)
                 .textFieldStyle(.plain)
                 .font(.largeTitle.bold())
@@ -206,7 +206,7 @@ private struct VolatileRow: View {
     private var listeningLine: some View {
         let words = model.recorder.heardLine
         let paused = model.recorder.state == .paused
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+        return HStack(alignment: .firstTextBaseline, spacing: Design.Space.m) {
             Image(systemName: paused ? "pause.circle" : "waveform")
                 .foregroundStyle(.secondary)
                 .frame(width: TimestampLabel.width, alignment: .trailing)
@@ -224,7 +224,7 @@ private struct VolatileRow: View {
     private var volatileText: some View {
         let text = model.recorder.volatileText
         let paused = model.recorder.state == .paused
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+        return HStack(alignment: .firstTextBaseline, spacing: Design.Space.m) {
             Image(systemName: paused ? "pause.circle" : "waveform")
                 .foregroundStyle(.secondary)
                 .frame(width: TimestampLabel.width, alignment: .trailing)
@@ -241,7 +241,7 @@ struct TimestampLabel: View {
 
     var body: some View {
         Text(TimeFormat.clock(seconds))
-            .font(.caption.monospacedDigit())
+            .font(Design.Typography.timestamp)
             .foregroundStyle(.tertiary)
             .frame(width: Self.width, alignment: .trailing)
     }
@@ -270,7 +270,7 @@ struct SegmentRow: View {
     @State private var editing = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: Design.Space.m) {
             TimestampLabel(seconds: item.timestamp)
             if editing {
                 TextField("Text", text: $item.text, axis: .vertical)

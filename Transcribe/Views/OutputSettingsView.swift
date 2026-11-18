@@ -41,7 +41,7 @@ struct OutputSettings: View {
             Section("Look") {
                 OutputSlideView(slide: Self.sample, theme: output.theme)
                     .aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: Design.Radius.small))
                 Picker("Font", selection: theme(\.fontName)) {
                     Text("System Serif").tag("")
                     ForEach(NSFontManager.shared.availableFontFamilies, id: \.self) { Text($0).tag($0) }

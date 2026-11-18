@@ -101,7 +101,7 @@ struct TranslationsSettings: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        if installed { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+                        if installed { Image(systemName: "checkmark.circle.fill").foregroundStyle(Design.Palette.good) }
                     }
                 }
             } header: {
@@ -153,14 +153,14 @@ private struct ImportTranslationSheet: View {
     @State private var installing = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Design.Space.l) {
             Text("Import Translation").font(.title2.bold())
             Grid(alignment: .leading, verticalSpacing: 6) {
                 GridRow { Text("Format").foregroundStyle(.secondary); Text(parsed.format.rawValue) }
                 GridRow { Text("Contents").foregroundStyle(.secondary); Text("\(parsed.verses.count.formatted()) verses in \(parsed.bookCount) books · \(testaments)") }
             }
             if !parsed.warnings.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Design.Space.xxs) {
                     ForEach(parsed.warnings, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.caption) }
                 }
                 .foregroundStyle(.secondary)
@@ -172,7 +172,7 @@ private struct ImportTranslationSheet: View {
                 Toggle("Our church is licensed to use this translation", isOn: $licensed)
             }
             .formStyle(.grouped)
-            if let error { Text(error).foregroundStyle(.red).font(.callout) }
+            if let error { Text(error).foregroundStyle(Design.Palette.error).font(.callout) }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
@@ -181,8 +181,8 @@ private struct ImportTranslationSheet: View {
                     .disabled(!licensed || abbreviation.trimmingCharacters(in: .whitespaces).isEmpty || installing)
             }
         }
-        .padding(20)
-        .frame(width: 520)
+        .padding(Design.Layout.sheetPadding)
+        .frame(width: Design.Layout.sheetWidth)
         .onAppear {
             abbreviation = parsed.abbreviation
             name = parsed.name
@@ -269,7 +269,7 @@ private struct ProviderSection: View {
         } header: {
             Text(provider.displayName)
         } footer: {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Design.Space.xs) {
                 switch provider {
                 case .esv:
                     Text("Free for non-commercial use with your own key. Up to 500 verses are kept on this Mac, as Crossway's terms allow, and the ESV copyright notice is shown with each passage.")

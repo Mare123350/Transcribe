@@ -41,12 +41,12 @@ private struct SessionRow: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: Design.Space.xxs) {
+            HStack(spacing: Design.Space.xs) {
                 if model.recorder.session === session && model.recorder.isActive {
                     // Still, not pulsing: a running animation redraws the window every frame.
                     Image(systemName: model.recorder.state == .paused ? "pause.circle.fill" : "record.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Design.Palette.recording)
                 }
                 if isRenaming {
                     TextField("Title", text: $session.title)
@@ -61,6 +61,6 @@ private struct SessionRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Design.Space.xxs)
     }
 }

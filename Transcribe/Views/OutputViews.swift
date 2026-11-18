@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+// design-lint: off — the slide canvas scales with the theme on a 1920×1080 canvas, not the UI tokens.
 /// One slide as it appears on the output screen. Laid out on a 1920×1080 canvas and scaled to fit,
 /// so the preview thumbnails show exactly what the screen will show.
 struct OutputSlideView: View {
@@ -101,6 +102,8 @@ struct OutputSlideView: View {
     }
 }
 
+// design-lint: on
+
 /// The window on the projector or second display: whatever is live, full screen.
 struct OutputWindowView: View {
     @Environment(AppModel.self) private var model
@@ -126,8 +129,8 @@ struct OutputWindowView: View {
     /// Fills the chosen display, borderless, above its menu bar. On a single-display Mac it stays
     /// an ordinary window so it doesn't cover the operator's screen.
     private var emptyHint: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "rectangle.on.rectangle").font(.system(size: 36))
+        VStack(spacing: Design.Space.m) {
+            Image(systemName: "rectangle.on.rectangle").font(Design.Typography.emptyIcon)
             Text("Nothing on screen").font(.title2.weight(.semibold))
             Group {
                 if let heading = model.output.preview?.slide?.heading {
@@ -139,10 +142,10 @@ struct OutputWindowView: View {
             .font(.callout)
             Text("Connect a projector or second display and this window fills it automatically.")
                 .font(.caption)
-                .padding(.top, 6)
+                .padding(.top, Design.Space.xs)
         }
         .multilineTextAlignment(.center)
-        .foregroundStyle(.white.opacity(0.6))
+        .foregroundStyle(.white.opacity(Design.Opacity.muted))
         .padding()
     }
 
@@ -185,7 +188,7 @@ struct OutputPanel: View {
                 HStack(alignment: .center, spacing: Design.Space.s) {
                     Image(systemName: "hand.raised.fill").foregroundStyle(Design.Palette.song)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("Holding your song").font(.caption.weight(.semibold))
+                        Text("Holding your song").font(Design.Typography.label)
                         Text(output.queue.isEmpty ? "Detections will wait." : "\(output.queue.count) detection\(output.queue.count == 1 ? "" : "s") waiting")
                             .font(.caption).foregroundStyle(.secondary)
                     }
@@ -197,7 +200,7 @@ struct OutputPanel: View {
                         .help("Let detected verses and songs reach Preview again")
                 }
                 .padding(Design.Space.s)
-                .background(Design.Palette.song.opacity(0.1), in: RoundedRectangle(cornerRadius: Design.Radius.small))
+                .background(Design.Palette.song.opacity(Design.Opacity.tint), in: RoundedRectangle(cornerRadius: Design.Radius.small))
             }
 
             ScreenBox(title: "Preview", cue: output.preview, live: false)
@@ -218,7 +221,7 @@ struct OutputPanel: View {
                 Button { withAnimation(Design.slideAnimation) { output.take() } } label: {
                     HStack(spacing: Design.Space.xs) {
                         Text("Send")
-                        Text("↩").foregroundStyle(.white.opacity(0.75))
+                        Text("↩").foregroundStyle(.white.opacity(Design.Opacity.muted))
                     }
                     .frame(minWidth: 64)
                 }
@@ -268,7 +271,7 @@ private struct ModeRow: View {
         let auto = output.mode == .autoSend
         VStack(alignment: .leading, spacing: Design.Space.xs) {
             HStack(spacing: Design.Space.s) {
-                Text("Auto-detect").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text("Auto-detect").font(Design.Typography.label).foregroundStyle(.secondary)
                 Picker("Auto-detect", selection: Binding(get: { output.mode }, set: { output.mode = $0 })) {
                     ForEach(OutputController.Mode.allCases) { Text($0.title).tag($0) }
                 }
@@ -285,7 +288,7 @@ private struct ModeRow: View {
             }
         }
         .padding(auto ? Design.Space.s : 0)
-        .background(auto ? Design.Palette.warning.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: Design.Radius.small))
+        .background(auto ? Design.Palette.warning.opacity(Design.Opacity.tint) : .clear, in: RoundedRectangle(cornerRadius: Design.Radius.small))
     }
 }
 
@@ -303,7 +306,7 @@ private struct DisplayStatus: View {
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 0) {
                 Text(external.map { output.isWindowOpen ? "Showing on \($0)" : "\($0) connected" } ?? "No second display")
-                    .font(.caption.weight(.semibold))
+                    .font(Design.Typography.label)
                 Text(external == nil
                      ? (output.isWindowOpen ? "The output is in a window on this screen." : "Connect a projector, or open the output as a window.")
                      : (output.isWindowOpen ? "The congregation sees what's in Live." : "Open the output to put it on that display."))
@@ -335,7 +338,7 @@ private struct ScreenBox: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.Space.xs) {
             HStack(spacing: Design.Space.xs) {
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+                Text(title).font(Design.Typography.label).foregroundStyle(.secondary).textCase(.uppercase)
                 Spacer(minLength: Design.Space.s)
                 if let slide = cue?.slide {
                     Text([slide.heading, slide.label].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -351,12 +354,12 @@ private struct ScreenBox: View {
                     emptyState.transition(.opacity)
                 }
             }
-            .animation(reduceMotion ? .easeInOut(duration: 0.15) : Design.slideAnimation, value: cue.map { "\($0.id)-\($0.page)" })
+            .animation(reduceMotion ? Design.Motion.fade : Design.slideAnimation, value: cue.map { "\($0.id)-\($0.page)" })
             .aspectRatio(16 / 9, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: Design.Radius.small))
             .overlay(
                 RoundedRectangle(cornerRadius: Design.Radius.small)
-                    .strokeBorder(live && cue != nil ? Design.Palette.live : Color.secondary.opacity(0.35), lineWidth: live && cue != nil ? 3 : 1)
+                    .strokeBorder(live && cue != nil ? Design.Palette.live : Color.secondary.opacity(Design.Opacity.border), lineWidth: live && cue != nil ? 3 : 1)
             )
             .overlay(alignment: .topLeading) {
                 if live && cue != nil {
@@ -386,9 +389,9 @@ private struct ScreenBox: View {
     private var emptyState: some View {
         ZStack {
             RoundedRectangle(cornerRadius: Design.Radius.small)
-                .fill(Color.secondary.opacity(0.06))
+                .fill(Color.secondary.opacity(Design.Opacity.wash))
             RoundedRectangle(cornerRadius: Design.Radius.small)
-                .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                .strokeBorder(Color.secondary.opacity(Design.Opacity.border), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             VStack(spacing: Design.Space.xs) {
                 Image(systemName: live ? "rectangle.slash" : "rectangle.dashed")
                     .font(.title2)
@@ -424,7 +427,7 @@ struct SlideStrip: View {
                                 .font(.caption.weight(current ? .bold : .regular).monospacedDigit())
                                 .padding(.horizontal, Design.Space.s)
                                 .padding(.vertical, Design.Space.xxs)
-                                .background(current ? (onLive ? Design.Palette.live : Color.accentColor) : Color.secondary.opacity(0.15), in: Capsule())
+                                .background(current ? (onLive ? Design.Palette.live : Color.accentColor) : Color.secondary.opacity(Design.Opacity.tint), in: Capsule())
                                 .foregroundStyle(current ? Color.white : Color.primary)
                         }
                         .buttonStyle(.plain)
@@ -435,11 +438,11 @@ struct SlideStrip: View {
                 }
                 .padding(Design.Space.xxs)
             }
-            .onChange(of: cue.page) { withAnimation { proxy.scrollTo(cue.page, anchor: .center) } }
+            .onChange(of: cue.page) { withAnimation(Design.Motion.scroll) { proxy.scrollTo(cue.page, anchor: .center) } }
         }
         .focusable()
         .focused($focused)
-        .overlay(RoundedRectangle(cornerRadius: Design.Radius.small).strokeBorder(focused ? Color.accentColor.opacity(0.6) : .clear))
+        .overlay(RoundedRectangle(cornerRadius: Design.Radius.small).strokeBorder(focused ? Design.Palette.accent.opacity(Design.Opacity.muted) : .clear))
         .onKeyPress(characters: .decimalDigits) { press in
             guard let number = Int(press.characters), number >= 1 else { return .ignored }
             model.output.go(toSlide: number - 1, onLive: onLive)

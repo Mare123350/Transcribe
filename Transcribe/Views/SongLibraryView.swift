@@ -165,12 +165,12 @@ private struct SongRow: View {
                 model.songs.rebuild()
             } label: {
                 Image(systemName: song.isFavorite ? "star.fill" : "star")
-                    .foregroundStyle(song.isFavorite ? Color.yellow : Color.secondary.opacity(0.5))
+                    .foregroundStyle(song.isFavorite ? Design.Palette.favorite : Color.secondary.opacity(Design.Opacity.muted))
             }
             .buttonStyle(.plain)
             .help(song.isFavorite ? "Remove from favourites" : "Add to favourites")
             .accessibilityLabel(song.isFavorite ? "Favourite" : "Not a favourite")
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Design.Space.xxs) {
                 Text(song.title.isEmpty ? "Untitled" : song.title).lineLimit(1)
                 let detail = [song.artist, song.ccliNumber.isEmpty ? "" : "CCLI \(song.ccliNumber)"].filter { !$0.isEmpty }.joined(separator: " · ")
                 if !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
@@ -179,7 +179,7 @@ private struct SongRow: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Design.Space.xxs)
     }
 }
 
