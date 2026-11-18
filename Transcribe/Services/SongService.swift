@@ -42,7 +42,7 @@ final class SongService {
     /// A library song is being sung right now.
     var isSinging: Bool { currentItemID != nil }
 
-    // MARK: Library
+    // MARK: - Library
 
     /// Adds the bundled hymns the first time the app runs, then builds the matcher.
     func load() {
@@ -93,7 +93,7 @@ final class SongService {
         return try? context.fetch(FetchDescriptor<StoredSong>(predicate: #Predicate { $0.id == id })).first
     }
 
-    // MARK: Live
+    // MARK: - Live
 
     func reset() {
         tracker.reset()
@@ -205,7 +205,7 @@ final class SongService {
         TranscriptLayout.invalidate(segment.session)
     }
 
-    // MARK: Operator actions
+    // MARK: - Operator actions
 
     func confirm(_ item: TranscriptItem) {
         item.status = .confirmed

@@ -138,10 +138,7 @@ enum PerformanceSelfTest {
     }
 
     static func finish(_ lines: [String]) {
-        let url = URL.temporaryDirectory.appending(path: "performance-self-test.txt")
-        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-        print("PERFTEST_OUTPUT \(url.path)")
-        exit(0)
+        SelfTestReport.finish(lines, to: URL.temporaryDirectory.appending(path: "performance-self-test.txt"), tag: "PERFTEST_OUTPUT")
     }
 
     static func format(_ duration: Duration) -> String {

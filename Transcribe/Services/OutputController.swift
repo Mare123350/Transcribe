@@ -152,7 +152,7 @@ final class OutputController {
         self.scripture = scripture
     }
 
-    // MARK: Operator actions
+    // MARK: - Operator actions
 
     /// Sends a card straight to the screen.
     func send(_ source: OutputSource) async {
@@ -191,7 +191,7 @@ final class OutputController {
         if case .librarySong = cue.source { followSong = false }
     }
 
-    // MARK: Recent
+    // MARK: - Recent
 
     private static func loadRecents() -> [RecentItem] {
         if let data = UserDefaults.standard.data(forKey: SettingsKey.recentItems),
@@ -294,7 +294,7 @@ final class OutputController {
         if onLive { live = cue } else { preview = cue }
     }
 
-    // MARK: Detections
+    // MARK: - Detections
 
     /// A new verse card. What happens depends on the auto-detect mode.
     func detected(_ item: TranscriptItem, confidence: Double) {
@@ -407,7 +407,7 @@ final class OutputController {
         Task { for source in sources { await refresh(source) } }
     }
 
-    // MARK: Building slides
+    // MARK: - Building slides
 
     /// Builds the slides for `source`, again if its card changed while they were being built,
     /// so a slow build can never put out-of-date text on screen.
@@ -520,7 +520,7 @@ final class OutputController {
         return String(String(number).map { digits[$0] ?? $0 })
     }
 
-    // MARK: Displays
+    // MARK: - Displays
 
     /// The chosen display, or another display than this one if there is one.
     var outputScreen: NSScreen? {

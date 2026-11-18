@@ -157,7 +157,7 @@ final class AppModel {
 
     var context: ModelContext { container.mainContext }
 
-    // MARK: Partial text
+    // MARK: - Partial text
 
     private var latestPartial: (text: String, session: Session)?
     private var partialTask: Task<Void, Never>?

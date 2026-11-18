@@ -134,12 +134,9 @@ enum SoakSelfTest {
     }
 
     static func finish(_ lines: [String], csv: [String]) {
-        let summary = folder.appending(path: "soak-self-test.txt")
-        try? lines.joined(separator: "\n").write(to: summary, atomically: true, encoding: .utf8)
         try? csv.joined(separator: "\n").write(to: folder.appending(path: "soak-self-test.csv"), atomically: true, encoding: .utf8)
-        print("SOAK_OUTPUT \(summary.path)")
         removeStore()
-        exit(0)
+        SelfTestReport.finish(lines, to: folder.appending(path: "soak-self-test.txt"), tag: "SOAK_OUTPUT")
     }
 }
 #endif

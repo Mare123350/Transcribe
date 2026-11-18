@@ -177,9 +177,7 @@ enum OutputSelfTest {
         lines.append("RECENT: \(output.recents.prefix(4).map(\.id))")
 
         output.mode = .preview
-        try? lines.joined(separator: "\n").write(to: folder.appending(path: "report.txt"), atomically: true, encoding: .utf8)
-        print("OUTPUTTEST_OUTPUT \(folder.path)")
-        exit(0)
+        SelfTestReport.finish(lines, to: folder.appending(path: "report.txt"), tag: "OUTPUTTEST_OUTPUT", printing: folder)
     }
 }
 #endif

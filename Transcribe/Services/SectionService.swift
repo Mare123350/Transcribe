@@ -50,7 +50,7 @@ final class SectionService {
         status = .current
     }
 
-    // MARK: Live
+    // MARK: - Live
 
     func process(_ segment: TranscriptItem, in session: Session) async {
         guard isEnabled else { return }
@@ -185,7 +185,7 @@ final class SectionService {
         header.subtitle = title
     }
 
-    // MARK: Helpers
+    // MARK: - Helpers
 
     /// The section in effect at the end of the transcript (or just before `item`).
     func currentSection(in session: Session, before item: TranscriptItem? = nil) -> ServiceSectionKind? {

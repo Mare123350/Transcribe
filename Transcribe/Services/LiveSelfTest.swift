@@ -81,10 +81,7 @@ enum LiveSelfTest {
     }
 
     private static func finish(_ lines: [String]) {
-        let url = URL.temporaryDirectory.appending(path: "live-self-test.txt")
-        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-        print("LIVETEST_OUTPUT \(url.path)")
-        exit(0)
+        SelfTestReport.finish(lines, to: URL.temporaryDirectory.appending(path: "live-self-test.txt"), tag: "LIVETEST_OUTPUT")
     }
 }
 #endif

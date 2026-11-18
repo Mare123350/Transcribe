@@ -145,7 +145,7 @@ final class ScriptureService {
         return translations.contains { $0.abbreviation == stored } ? stored : (translations.first?.abbreviation ?? "KJV")
     }
 
-    // MARK: Loading
+    // MARK: - Loading
 
     func load() async {
         let bundled = (Bundle.main.urls(forResourcesWithExtension: "sqlite", subdirectory: nil) ?? [])
@@ -187,7 +187,7 @@ final class ScriptureService {
         await load()
     }
 
-    // MARK: Online providers
+    // MARK: - Online providers
 
     func hasKey(_ provider: OnlineProviderID) -> Bool { KeychainCredentialStore().key(for: provider) != nil }
 
@@ -258,7 +258,7 @@ final class ScriptureService {
         item.verseCopyright = ""
     }
 
-    // MARK: Live detection
+    // MARK: - Live detection
 
     func reset() {
         listening.removeAll()
@@ -528,7 +528,7 @@ final class ScriptureService {
         }
     }
 
-    // MARK: Operator actions
+    // MARK: - Operator actions
 
     /// ⌘B: adds a verse the operator typed.
     func insertManual(_ reference: BibleReference, abbreviation: String, in session: Session, at time: TimeInterval) async {
@@ -577,7 +577,7 @@ final class ScriptureService {
         item.status = .confirmed
     }
 
-    // MARK: Helpers
+    // MARK: - Helpers
 
     /// Items this service has looked up, so the main thread doesn't run a fetch per lookup.
     private var known: [UUID: TranscriptItem] = [:]
