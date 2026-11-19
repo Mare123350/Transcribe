@@ -218,6 +218,9 @@ struct OutputPanel: View {
                         .help("Drop this one and show the next waiting detection")
                 }
                 Spacer(minLength: 0)
+                Button("Clear") { output.clearPreview() }
+                    .disabled(output.preview == nil)
+                    .help(output.queue.isEmpty ? "Empty Preview" : "Empty Preview and drop the waiting detections")
                 Button { withAnimation(Design.slideAnimation) { output.take() } } label: {
                     HStack(spacing: Design.Space.xs) {
                         Text("Send")

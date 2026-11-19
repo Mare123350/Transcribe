@@ -246,6 +246,12 @@ final class OutputController {
         preview = queue.isEmpty ? nil : queue.removeFirst()
     }
 
+    /// Empties Preview, and drops the detections waiting behind it.
+    func clearPreview() {
+        preview = nil
+        queue.removeAll()
+    }
+
     func clearScreen() {
         live = nil
         manualHold = false
