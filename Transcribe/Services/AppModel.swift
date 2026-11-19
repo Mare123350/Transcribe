@@ -38,7 +38,7 @@ final class AppModel {
     private var displayObserver: NSObjectProtocol?
 
     /// Presentation-style keys in the main window when nothing is being typed: Return or Space
-    /// sends the preview to the screen, Escape clears the screen.
+    /// sends the preview to the screen, Escape clears the screen, Delete clears the preview.
     func installScreenKeys() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -54,6 +54,10 @@ final class AppModel {
             case 53: // Escape
                 guard self.output.live != nil else { return event }
                 withAnimation(Design.slideAnimation) { self.output.clearScreen() }
+                return nil
+            case 51: // Delete
+                guard self.output.preview != nil else { return event }
+                self.output.clearPreview()
                 return nil
             default:
                 return event

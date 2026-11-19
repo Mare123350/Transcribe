@@ -220,7 +220,7 @@ struct OutputPanel: View {
                 Spacer(minLength: 0)
                 Button("Clear") { output.clearPreview() }
                     .disabled(output.preview == nil)
-                    .help(output.queue.isEmpty ? "Empty Preview" : "Empty Preview and drop the waiting detections")
+                    .help(output.queue.isEmpty ? "Empty Preview (Delete; ⌥⌘⌫ while typing)" : "Empty Preview and drop the waiting detections (Delete; ⌥⌘⌫ while typing)")
                 Button { withAnimation(Design.slideAnimation) { output.take() } } label: {
                     HStack(spacing: Design.Space.xs) {
                         Text("Send")

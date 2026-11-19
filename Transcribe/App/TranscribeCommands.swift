@@ -73,6 +73,9 @@ struct TranscribeCommands: Commands {
                 .keyboardShortcut(.upArrow, modifiers: [.command, .option])
             Button("Skip Preview") { model.output.skipPreview() }
                 .disabled(model.output.preview == nil)
+            Button("Clear Preview") { model.output.clearPreview() }
+                .keyboardShortcut(.delete, modifiers: [.command, .option])
+                .disabled(model.output.preview == nil)
             Divider()
             Picker("Auto-Detect", selection: Binding(get: { model.output.mode }, set: { model.output.mode = $0 })) {
                 ForEach(OutputController.Mode.allCases) { Text($0.title).tag($0) }
