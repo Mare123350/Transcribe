@@ -73,7 +73,7 @@ private struct PresentationItem: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label(item.title, systemImage: "music.note")
                     .font(.system(size: fontSize * 0.6, weight: .semibold))
-                    .foregroundStyle(.purple.mix(with: .white, by: 0.4))
+                    .foregroundStyle(Design.Palette.song.mix(with: .white, by: 0.4))
                 if let last = item.lyricSections.last {
                     Text(last.lyrics)
                         .font(.system(size: fontSize))

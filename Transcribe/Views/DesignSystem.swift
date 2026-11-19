@@ -38,12 +38,18 @@ enum Design {
         static let large: CGFloat = 14
     }
 
-    /// Category colours carry meaning (orange is scripture, purple is song, red is live);
+    /// Category colours carry meaning (orange is scripture, teal is song, red is live);
     /// everything else uses the system accent and greys.
     enum Palette {
         static let accent = Color.accentColor
         static let scripture = Color.orange
-        static let song = Color.purple
+        /// Teal. Deeper in light mode, where the system teal is too pale for small text on white
+        /// (about 2.3:1); this one is about 4.7:1.
+        static let song = Color(nsColor: NSColor(name: "songTeal") { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                ? .systemTeal
+                : NSColor(srgbRed: 0, green: 0.5, blue: 0.56, alpha: 1)
+        })
         static let live = Color.red
         static let recording = Color.red
         static let paused = Color(nsColor: .systemOrange)

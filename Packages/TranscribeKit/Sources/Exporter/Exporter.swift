@@ -137,10 +137,11 @@ public enum Exporter {
                 line.addAttribute(.paragraphStyle, value: paragraph(), range: NSRange(location: 0, length: line.length))
                 result.append(line)
             case let .song(_, title, artist, sections):
-                let purple = NSColor(red: 0.45, green: 0.2, blue: 0.6, alpha: 1)
-                add("♪ Song: \(title)" + (artist.isEmpty ? "" : " — \(artist)"), .boldSystemFont(ofSize: 12), color: purple, style: paragraph(spacingBefore: 6, spacingAfter: 4, indent: 14))
+                // A dark teal, to match the app's song colour and stay readable on white paper.
+                let songColor = NSColor(red: 0.0, green: 0.42, blue: 0.47, alpha: 1)
+                add("♪ Song: \(title)" + (artist.isEmpty ? "" : " — \(artist)"), .boldSystemFont(ofSize: 12), color: songColor, style: paragraph(spacingBefore: 6, spacingAfter: 4, indent: 14))
                 for section in sections {
-                    if !section.name.isEmpty { add(section.name.uppercased(), .boldSystemFont(ofSize: 8.5), color: purple, style: paragraph(spacingAfter: 1, indent: 14)) }
+                    if !section.name.isEmpty { add(section.name.uppercased(), .boldSystemFont(ofSize: 8.5), color: songColor, style: paragraph(spacingAfter: 1, indent: 14)) }
                     add(section.lyrics, body, style: paragraph(spacingAfter: 6, indent: 14))
                 }
             case let .verse(_, reference, version, confidence, text, spoken):
