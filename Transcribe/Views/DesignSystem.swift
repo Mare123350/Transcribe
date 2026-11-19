@@ -98,6 +98,8 @@ enum Design {
         static let scroll = Animation.easeInOut(duration: 0.25)
         /// How a slide moves from Preview to Live.
         static let slide = Animation.snappy(duration: 0.28)
+        /// A custom button settling back after a press.
+        static let press = Animation.easeOut(duration: 0.12)
         /// How far a custom button shrinks while pressed.
         static let pressScale: CGFloat = 0.97
     }
@@ -135,6 +137,15 @@ extension View {
     /// A form sheet: fixed width, standard padding.
     func sheetLayout() -> some View {
         padding(Design.Layout.sheetPadding).frame(width: Design.Layout.sheetWidth)
+    }
+}
+
+extension Design.Motion {
+    /// A scroll the user asked for, or none with Reduce Motion: the view jumps instead of gliding.
+    static func scroll(reduced: Bool) -> Animation? { reduced ? nil : scroll }
+    /// Something sliding in from an edge, or a plain fade with Reduce Motion.
+    static func edge(_ edge: Edge, reduced: Bool) -> AnyTransition {
+        reduced ? .opacity : .move(edge: edge).combined(with: .opacity)
     }
 }
 

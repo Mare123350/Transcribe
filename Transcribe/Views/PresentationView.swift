@@ -7,6 +7,7 @@ struct PresentationView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(SettingsKey.presentationFontSize) private var fontSize = 44.0
     @State private var window: NSWindow?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let session = model.recorder.isActive ? model.recorder.session : model.selectedSession
@@ -31,7 +32,7 @@ struct PresentationView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .scrollIndicators(.hidden)
-                .onChange(of: items.last?.id) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+                .onChange(of: items.last?.id) { withAnimation(Design.Motion.scroll(reduced: reduceMotion)) { proxy.scrollTo("end", anchor: .bottom) } }
                 .onChange(of: model.recorder.volatileText) { proxy.scrollTo("end", anchor: .bottom) }
             }
             if session == nil || items.isEmpty {

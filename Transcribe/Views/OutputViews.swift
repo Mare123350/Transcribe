@@ -206,10 +206,10 @@ struct OutputPanel: View {
             ScreenBox(title: "Preview", cue: output.preview, live: false)
             if let cue = output.preview, cue.slides.count > 1 { SlideStrip(cue: cue, onLive: false) }
             HStack(spacing: Design.Space.xs) {
-                Button { Task { await output.step(verse: -1, onLive: false) } } label: { Image(systemName: "chevron.left") }
+                Button { Task { await output.step(verse: -1, onLive: false) } } label: { Label("Previous Verse", systemImage: "chevron.left").labelStyle(.iconOnly) }
                     .help("Previous verse or section (⌥⌘←)")
                     .accessibilityLabel("Previous verse or section")
-                Button { Task { await output.step(verse: 1, onLive: false) } } label: { Image(systemName: "chevron.right") }
+                Button { Task { await output.step(verse: 1, onLive: false) } } label: { Label("Next Verse", systemImage: "chevron.right").labelStyle(.iconOnly) }
                     .help("Next verse or section (⌥⌘→)")
                     .accessibilityLabel("Next verse or section")
                 if !output.queue.isEmpty {
@@ -235,10 +235,10 @@ struct OutputPanel: View {
             ScreenBox(title: "Live", cue: output.live, live: true)
             if let cue = output.live, cue.slides.count > 1 { SlideStrip(cue: cue, onLive: true) }
             HStack(spacing: Design.Space.xs) {
-                Button { Task { await output.step(slide: -1, onLive: true) } } label: { Image(systemName: "chevron.left") }
+                Button { Task { await output.step(slide: -1, onLive: true) } } label: { Label("Previous Slide", systemImage: "chevron.left").labelStyle(.iconOnly) }
                     .help("Previous slide (⌘[)")
                     .accessibilityLabel("Previous slide")
-                Button { Task { await output.step(slide: 1, onLive: true) } } label: { Image(systemName: "chevron.right") }
+                Button { Task { await output.step(slide: 1, onLive: true) } } label: { Label("Next Slide", systemImage: "chevron.right").labelStyle(.iconOnly) }
                     .help("Next slide (⌘])")
                     .accessibilityLabel("Next slide")
                 if case .song? = output.live?.source {
@@ -415,6 +415,7 @@ struct SlideStrip: View {
     let onLive: Bool
     @Environment(AppModel.self) private var model
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -438,7 +439,7 @@ struct SlideStrip: View {
                 }
                 .padding(Design.Space.xxs)
             }
-            .onChange(of: cue.page) { withAnimation(Design.Motion.scroll) { proxy.scrollTo(cue.page, anchor: .center) } }
+            .onChange(of: cue.page) { withAnimation(Design.Motion.scroll(reduced: reduceMotion)) { proxy.scrollTo(cue.page, anchor: .center) } }
         }
         .focusable()
         .focused($focused)

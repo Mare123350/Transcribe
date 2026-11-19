@@ -72,7 +72,7 @@ struct SongBlockView: View {
             SongPickerMenu(title: "Change Song") { model.songs.change(item, to: $0) }
             Button("Insert Header Above") { model.insertHeader(.worship, before: item, in: session) }
             Divider()
-            Button("Not a Song — Restore Transcript", role: .destructive) { model.songs.dismiss(item) }
+            Button("Not a Song: Restore Transcript", role: .destructive) { model.songs.dismiss(item) }
         }
     }
 }
@@ -93,7 +93,7 @@ struct DetectedSongChip: View {
                 .tint(Design.Palette.song)
             SongPickerMenu(title: "Change") { model.songs.change(item, to: $0) }
                 .fixedSize()
-            Button { model.songs.dismiss(item) } label: { Image(systemName: "xmark") }
+            Button { model.songs.dismiss(item) } label: { Label("Not a Song", systemImage: "xmark").labelStyle(.iconOnly) }
                 .help("Not a song: restore the transcript")
         }
         .controlSize(.small)

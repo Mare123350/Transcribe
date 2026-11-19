@@ -84,7 +84,7 @@ struct SongLibraryView: View {
                         .fixedSize()
                         .help("Import plain text, ChordPro, OpenLyrics, CCLI SongSelect or JSON files")
                     Spacer(minLength: 0)
-                    Button { exporting = true } label: { Image(systemName: "square.and.arrow.up") }
+                    Button { exporting = true } label: { Label("Export Library", systemImage: "square.and.arrow.up").labelStyle(.iconOnly) }
                         .help("Export the library as JSON")
                         .disabled(songs.isEmpty)
                 }
@@ -224,13 +224,13 @@ private struct SongEditor: View {
                     HStack {
                         Text(sections[index].name.isEmpty ? "Section \(index + 1)" : sections[index].name)
                         Spacer()
-                        Button { Task { await model.output.previewOnly(.librarySong(song.id, section: index)) } } label: { Image(systemName: "eye") }
+                        Button { Task { await model.output.previewOnly(.librarySong(song.id, section: index)) } } label: { Label("Show in Preview", systemImage: "eye").labelStyle(.iconOnly) }
                             .help("Show this section in Preview")
-                        Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }.disabled(index == 0)
+                        Button { move(index, by: -1) } label: { Label("Move Up", systemImage: "arrow.up").labelStyle(.iconOnly) }.disabled(index == 0)
                             .help("Move up")
-                        Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }.disabled(index == sections.count - 1)
+                        Button { move(index, by: 1) } label: { Label("Move Down", systemImage: "arrow.down").labelStyle(.iconOnly) }.disabled(index == sections.count - 1)
                             .help("Move down")
-                        Button(role: .destructive) { sections.remove(at: index) } label: { Image(systemName: "trash") }
+                        Button(role: .destructive) { sections.remove(at: index) } label: { Label("Delete Section", systemImage: "trash").labelStyle(.iconOnly) }
                             .help("Delete section")
                     }
                     .buttonStyle(.borderless)

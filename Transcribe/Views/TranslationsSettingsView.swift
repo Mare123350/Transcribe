@@ -50,10 +50,12 @@ struct TranslationsSettings: View {
                             Text(version.name).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer()
-                        Button { move(abbreviation, by: -1) } label: { Image(systemName: "chevron.up") }
+                        Button { move(abbreviation, by: -1) } label: { Label("Move Up", systemImage: "chevron.up").labelStyle(.iconOnly) }
                             .buttonStyle(.borderless).disabled(index == 0)
-                        Button { move(abbreviation, by: 1) } label: { Image(systemName: "chevron.down") }
+                            .help("Try \(abbreviation) earlier")
+                        Button { move(abbreviation, by: 1) } label: { Label("Move Down", systemImage: "chevron.down").labelStyle(.iconOnly) }
                             .buttonStyle(.borderless).disabled(index == order.count - 1)
+                            .help("Try \(abbreviation) later")
                     }
                 }
             } header: {

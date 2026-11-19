@@ -6,6 +6,7 @@ struct TranscriptView: View {
     @Bindable var session: Session
     @Environment(AppModel.self) private var model
     @AppStorage(SettingsKey.fontSize) private var fontSize = 16.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var followLive = true
     @State private var atBottom = true
     @State private var userScrolling = false
@@ -25,6 +26,10 @@ struct TranscriptView: View {
                 LazyVStack(alignment: .leading, spacing: Design.Space.m) {
                     TranscriptHeaderView(session: session, isLive: isLive, hasPhrases: layout.rows.count > layout.headers.count + layout.songs.count + layout.verses.count)
                         .padding(.bottom, Design.Space.s)
+
+                    if layout.rows.isEmpty && !isLive {
+                        TranscriptEmptyState()
+                    }
 
                     ForEach(layout.rows) { row in
                         TranscriptItemRow(item: row.item, session: session, children: layout.children[row.id] ?? [])
@@ -76,14 +81,14 @@ struct TranscriptView: View {
             .onChange(of: model.scrollTarget) {
                 guard let target = model.scrollTarget else { return }
                 followLive = false
-                withAnimation(Design.Motion.scroll) { proxy.scrollTo(target, anchor: .top) }
+                withAnimation(Design.Motion.scroll(reduced: reduceMotion)) { proxy.scrollTo(target, anchor: .top) }
                 model.scrollTarget = nil
             }
             .overlay(alignment: .top) {
                 if let id = model.songs.pendingItemID, let pending = layout.songs.last(where: { $0.id == id }), pending.status == .detected {
                     DetectedSongChip(item: pending)
                         .padding(.top, Design.Space.s)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .transition(Design.Motion.edge(.top, reduced: reduceMotion))
                 }
             }
             .animation(Design.Motion.enter, value: model.songs.pendingItemID)
@@ -91,7 +96,7 @@ struct TranscriptView: View {
                 if isLive && !followLive {
                     Button {
                         followLive = true
-                        withAnimation(Design.Motion.scroll) { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+                        withAnimation(Design.Motion.scroll(reduced: reduceMotion)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
                     } label: {
                         Label("Jump to Live", systemImage: "arrow.down.to.line")
                     }
@@ -99,7 +104,7 @@ struct TranscriptView: View {
                     .keyboardShortcut(.end, modifiers: [.command])
                     .help("Scroll to the newest text and keep following it (⌘↘)")
                     .padding()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(Design.Motion.edge(.bottom, reduced: reduceMotion))
                 }
             }
         }
@@ -167,11 +172,12 @@ private struct TranscriptHeaderView: View {
                 Button {
                     generator.generate(session, context: model.context)
                 } label: {
-                    Label("Generate Full Transcript", systemImage: "text.quote")
+                    Label(generator.errors[session.id] == nil ? "Generate Full Transcript" : "Try Again", systemImage: "text.quote")
                 }
                 .help("Transcribe this service's saved audio and add every word between the cards")
                 if let error = generator.errors[session.id] {
-                    Text(error).font(.callout).foregroundStyle(.secondary)
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.callout).foregroundStyle(Design.Palette.error)
                 }
             }
         }
@@ -294,5 +300,24 @@ struct SegmentRow: View {
             Divider()
             Button("Delete", role: .destructive) { model.context.delete(item) }
         }
+    }
+}
+
+/// A service with nothing in it yet: what will appear, and how to start.
+private struct TranscriptEmptyState: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Design.Space.s) {
+            Text("Nothing recorded yet")
+                .font(.title3.weight(.semibold))
+            Text(model.recorder.mode == .detections
+                 ? "Press Record (⌘R). Section headers, songs and Bible verses appear here as they're heard."
+                 : "Press Record (⌘R). The words appear here as they're spoken, with headers, songs and Bible verses marked.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.body)
+        .padding(.vertical, Design.Space.xl)
     }
 }
