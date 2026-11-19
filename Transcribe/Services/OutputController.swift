@@ -121,6 +121,9 @@ final class OutputController {
 
     var mode: Mode {
         get {
+            // Read so SwiftUI observes the setting: UserDefaults itself isn't observable, and
+            // without this the picker kept showing the old mode after a new one was chosen.
+            _ = modeVersion
             if isSelfTestRun, let testMode { return testMode }
             return Mode(rawValue: UserDefaults.standard.string(forKey: SettingsKey.outputMode) ?? "") ?? .preview
         }
@@ -131,7 +134,7 @@ final class OutputController {
     }
     /// Detections less sure than this are never sent automatically.
     var threshold: Double {
-        get { UserDefaults.standard.object(forKey: SettingsKey.outputThreshold) as? Double ?? 0.85 }
+        get { _ = modeVersion; return UserDefaults.standard.object(forKey: SettingsKey.outputThreshold) as? Double ?? 0.85 }
         set { UserDefaults.standard.set(newValue, forKey: SettingsKey.outputThreshold); modeVersion += 1 }
     }
     private var modeVersion = 0
