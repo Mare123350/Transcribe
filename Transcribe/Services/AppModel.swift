@@ -167,7 +167,7 @@ final class AppModel {
     private var partialTask: Task<Void, Never>?
     private var latestPartialTime: TimeInterval = 0
 
-    /// In-progress text is checked for scripture at most every 250 ms, newest text first.
+    /// In-progress text is checked for songs and scripture at most every 250 ms, newest text first.
     private func partialTextChanged(_ text: String, in session: Session) {
         latestPartial = (text, session)
         latestPartialTime = recorder.currentTime
@@ -176,8 +176,12 @@ final class AppModel {
             try? await Task.sleep(for: .milliseconds(250))
             guard let self else { return }
             self.partialTask = nil
-            guard let (text, session) = self.latestPartial, !text.isEmpty, !self.songs.isSinging else { return }
-            await self.scripture.processPartial(text, in: session, at: self.latestPartialTime)
+            guard let (text, session) = self.latestPartial, !text.isEmpty else { return }
+            let time = self.latestPartialTime
+            // Songs first: a line being sung shouldn't also be read as a quoted verse.
+            await self.songs.processPartial(text, in: session, at: time)
+            guard !self.songs.isSinging else { return }
+            await self.scripture.processPartial(text, in: session, at: time)
         }
     }
 

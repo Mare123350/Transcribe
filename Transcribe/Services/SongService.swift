@@ -32,6 +32,10 @@ final class SongService {
     /// Recent window matches, to recover sections sung before the song was confirmed.
     private var recentMatches: [SongMatch] = []
     private var currentItemID: UUID?
+    /// When the last finished phrase ended: in-progress singing started after it.
+    private var lastSegmentEnd: TimeInterval = 0
+    /// How many in-progress words were last matched, so the tracker only hears new evidence.
+    private var partialWordsMatched = 0
 
     init(context: ModelContext) {
         self.context = context
@@ -102,6 +106,8 @@ final class SongService {
         recentMatches.removeAll()
         currentItemID = nil
         pendingItemID = nil
+        lastSegmentEnd = 0
+        partialWordsMatched = 0
     }
 
     /// Feeds one finalized segment. Returns true if it was sung (and folded under a song).
@@ -111,6 +117,9 @@ final class SongService {
         let tokens = TextNormalizer.tokens(segment.text)
         window = Array((window + tokens).suffix(SongMatcher.windowSize))
         recentSegments = Array((recentSegments + [(segment.id, tokens)]).suffix(8))
+        lastSegmentEnd = max(lastSegmentEnd, segment.endTimestamp)
+        // The phrase now finished was the in-progress text; what follows starts a new count.
+        partialWordsMatched = 0
 
         tracker.startThreshold = UserDefaults.standard.object(forKey: SettingsKey.songThreshold) as? Double ?? 0.55
         // Matching runs off the main thread; the library can be large.
@@ -121,7 +130,7 @@ final class SongService {
         for event in tracker.update(match, at: now) {
             switch event {
             case .started(let match):
-                startSong(match, at: segment, in: session)
+                startSong(match, firstSung: segment, at: segment.timestamp, until: segment.endTimestamp, in: session)
                 sung = true
             case .sectionChanged(let match):
                 appendSection(match)
@@ -142,6 +151,47 @@ final class SongService {
         return sung
     }
 
+    /// Matches the words still being recognized. While people sing, the recognizer can hold a
+    /// line as in-progress text for many seconds before finishing it; matching only finished
+    /// phrases made the song card wait for that, then for a second phrase to confirm it.
+    /// The tracker is only told about a match when at least four new words back it, so a
+    /// song below the strong threshold still needs two separate pieces of evidence.
+    func processPartial(_ text: String, in session: Session, at time: TimeInterval) async {
+        guard !matcher.isEmpty else { return }
+        let tokens = TextNormalizer.tokens(text)
+        // A shorter text is a new utterance after a finished phrase.
+        if tokens.count < partialWordsMatched { partialWordsMatched = 0 }
+        guard tokens.count >= partialWordsMatched + 4 else { return }
+        partialWordsMatched = tokens.count
+
+        tracker.startThreshold = UserDefaults.standard.object(forKey: SettingsKey.songThreshold) as? Double ?? 0.55
+        let matcher = self.matcher, window = Array((self.window + tokens).suffix(SongMatcher.windowSize))
+        // Also the line being sung on its own: the words spoken before a song (the welcome, "let's
+        // stand") fill the shared window and hold its score down until enough lyrics push them out.
+        let line = tokens.count >= 8 ? Array(tokens.suffix(SongMatcher.windowSize)) : nil
+        let match = await Task.detached(priority: .userInitiated) {
+            [matcher.match(window: window), line.flatMap { matcher.match(window: $0) }]
+                .compactMap { $0 }.max { $0.confidence < $1.confidence }
+        }.value
+        // A finished phrase may have arrived while matching; its result is newer than this one.
+        guard partialWordsMatched == tokens.count else { return }
+        if let match { recentMatches = Array((recentMatches + [match]).suffix(4)) }
+        for event in tracker.update(match, at: now) {
+            switch event {
+            case .started(let match):
+                startSong(match, firstSung: nil, at: max(lastSegmentEnd, 0), until: time, in: session)
+            case .sectionChanged(let match):
+                appendSection(match)
+            case .ended:
+                endSong()
+            }
+        }
+        if let currentItemID, let item = item(currentItemID), let match, match.songID == item.songID {
+            item.confidence = max(item.confidence, match.confidence)
+            item.endTimestamp = max(item.endTimestamp, time)
+        }
+    }
+
     /// Called every second while recording, so a song ends ~15 s after the singing stops.
     func tick() {
         for event in tracker.tick(at: now) {
@@ -149,16 +199,20 @@ final class SongService {
         }
     }
 
-    private func startSong(_ match: SongMatch, at segment: TranscriptItem, in session: Session) {
+    /// Starts a song card. `segment` is the finished phrase that confirmed it, or nil when the
+    /// in-progress text did; then the card goes at `time`, unless earlier finished lines belong.
+    private func startSong(_ match: SongMatch, firstSung segment: TranscriptItem?, at time: TimeInterval, until end: TimeInterval, in session: Session) {
         guard let record = matcher.song(match.songID) else { return }
         // Recent lines that belong to this song were its opening lines.
         let sungLines = recentSegments
-            .filter { matcher.segmentBelongs($0.tokens, to: match.songID) || $0.id == segment.id }
+            .filter { matcher.segmentBelongs($0.tokens, to: match.songID) || $0.id == segment?.id }
             .compactMap { item($0.id) }
             .filter { $0.session === session && $0.kind == .segment }
         let firstSung = sungLines.min { $0.sortIndex < $1.sortIndex } ?? segment
 
-        let song = TranscriptItem(kind: .song, sortIndex: session.sortIndex(before: firstSung), timestamp: firstSung.timestamp)
+        let song = TranscriptItem(kind: .song,
+                                  sortIndex: firstSung.map { session.sortIndex(before: $0) } ?? session.sortIndex(at: time, after: true),
+                                  timestamp: firstSung?.timestamp ?? time)
         song.title = record.title
         song.artist = record.artist
         song.songID = record.id
@@ -171,7 +225,7 @@ final class SongService {
         }
         if indices.last != match.sectionIndex { indices.append(match.sectionIndex) }
         song.lyricSections = indices.filter { record.sections.indices.contains($0) }.map { record.sections[$0] }
-        song.endTimestamp = segment.endTimestamp
+        song.endTimestamp = end
         context.insert(song)
         song.session = session
         currentItemID = song.id

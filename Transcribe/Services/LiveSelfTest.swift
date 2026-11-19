@@ -32,6 +32,7 @@ enum LiveSelfTest {
         var maxGap = Duration.zero
         var segmentsSeen: [(Duration, String)] = []
         var versesSeen: [UUID: (Duration, String)] = [:]
+        var songsSeen: [UUID: (Duration, String)] = [:]
         var interrupted = false
         var seenCount = 0
         while clock.now - recordingStarted < .seconds(UserDefaults.standard.double(forKey: "LiveSeconds") > 0 ? UserDefaults.standard.double(forKey: "LiveSeconds") : 25) {
@@ -45,6 +46,9 @@ enum LiveSelfTest {
             }
             for verse in model.selectedSession?.layout.verses ?? [] where versesSeen[verse.id] == nil {
                 versesSeen[verse.id] = (tick - recordingStarted, verse.reference)
+            }
+            for song in model.selectedSession?.layout.songs ?? [] where songsSeen[song.id] == nil {
+                songsSeen[song.id] = (tick - recordingStarted, song.title)
             }
             let items = model.selectedSession?.orderedItems.filter { $0.kind == .segment } ?? []
             if items.count > seenCount {
@@ -68,6 +72,7 @@ enum LiveSelfTest {
         lines.append("longest main-thread gap while polling every 20 ms: \(maxGap)")
         for (time, text) in segmentsSeen { lines.append("  final at \(time): \(text)") }
         for (time, reference) in versesSeen.values.sorted(by: { $0.0 < $1.0 }) { lines.append("  verse card \(reference) appeared at \(time)") }
+        for (time, title) in songsSeen.values.sorted(by: { $0.0 < $1.0 }) { lines.append("  song card \(title) appeared at \(time)") }
         let seconds = updates.map { Double($0.components.seconds) + Double($0.components.attoseconds) / 1e18 }.sorted()
         if !seconds.isEmpty {
             lines.append(String(format: "partial updates: %d, median gap %.2fs, 90th %.2fs, max %.2fs",

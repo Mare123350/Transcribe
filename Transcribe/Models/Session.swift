@@ -62,7 +62,7 @@ final class Session {
     /// For a phrase that isn't in the service ("Scripture and songs only"): a sort index that
     /// places the new item by time among the cards and headers that are, before items at the
     /// same time or (`after`) after them.
-    @MainActor private func sortIndex(at time: TimeInterval, after: Bool) -> Double {
+    @MainActor func sortIndex(at time: TimeInterval, after: Bool) -> Double {
         let top = layout.rows.map(\.item)
         // Usually at or near the end: search from there.
         var index = top.count
